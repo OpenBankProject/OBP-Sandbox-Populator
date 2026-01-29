@@ -12,7 +12,8 @@
 		TrendingUp,
 		History,
 		Copy,
-		Check
+		Check,
+		ExternalLink
 	} from '@lucide/svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -64,6 +65,10 @@
 	function formatErrors() {
 		if (!form?.results?.errors) return '';
 		return form.results.errors.join('\n');
+	}
+
+	function getTransactionUrl(txn: { transaction_id: string; bank_id: string; from_account_id: string }) {
+		return `/transaction/${txn.bank_id}/${txn.from_account_id}/${txn.transaction_id}`;
 	}
 </script>
 
@@ -225,10 +230,37 @@
 			</h2>
 
 			{#if isLoading}
-				<div class="flex flex-col items-center justify-center py-12 text-surface-400">
-					<Loader2 class="size-12 animate-spin mb-4" />
-					<p>Creating sandbox data...</p>
-					<p class="text-sm mt-2">This may take a moment</p>
+				<div class="py-6 text-surface-400">
+					<p class="text-sm mb-4">Populating sandbox data...</p>
+					<ul class="space-y-3">
+						<li class="flex items-center gap-3">
+							<Loader2 class="size-4 animate-spin text-primary-400" />
+							<span>Creating {numBanks} bank{numBanks > 1 ? 's' : ''}...</span>
+						</li>
+						<li class="flex items-center gap-3">
+							<Loader2 class="size-4 animate-spin text-primary-400" />
+							<span>Creating {numAccountsPerBank} account{numAccountsPerBank > 1 ? 's' : ''} per bank...</span>
+						</li>
+						{#if createCounterparties}
+							<li class="flex items-center gap-3">
+								<Loader2 class="size-4 animate-spin text-primary-400" />
+								<span>Adding Botswana business counterparties...</span>
+							</li>
+						{/if}
+						{#if createFxRates}
+							<li class="flex items-center gap-3">
+								<Loader2 class="size-4 animate-spin text-primary-400" />
+								<span>Setting up FX rates for African currencies...</span>
+							</li>
+						{/if}
+						{#if createTransactions}
+							<li class="flex items-center gap-3">
+								<Loader2 class="size-4 animate-spin text-primary-400" />
+								<span>Generating 12 months of historical transactions...</span>
+							</li>
+						{/if}
+					</ul>
+					<p class="text-xs text-surface-500 mt-6">This may take a moment depending on the number of items...</p>
 				</div>
 			{:else if form?.success && form.results}
 				<div class="space-y-4 max-h-[60vh] overflow-y-auto">
@@ -394,8 +426,14 @@
 						{#if form.results.transactions.length > 0}
 							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
 								{#each form.results.transactions as txn}
-									<li>
-										<code class="text-xs bg-surface-700 px-1 rounded">{txn.transaction_id}</code>
+									<li class="flex items-center gap-1">
+										<a
+											href={getTransactionUrl(txn)}
+											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+										>
+											<code class="text-xs bg-surface-700 px-1 rounded">{txn.transaction_id}</code>
+											<ExternalLink class="size-3" />
+										</a>
 										<span class="text-surface-500 mx-1">|</span>
 										<span class="text-tertiary-400">{txn.amount}</span>
 									</li>

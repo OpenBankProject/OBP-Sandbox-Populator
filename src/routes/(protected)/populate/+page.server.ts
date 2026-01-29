@@ -27,6 +27,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.session?.data?.user;
 	return {
 		username: user?.username || 'unknown',
+		obpBaseUrl: env.PUBLIC_OBP_BASE_URL,
 		defaults: {
 			numBanks: 2,
 			numAccountsPerBank: 5,
