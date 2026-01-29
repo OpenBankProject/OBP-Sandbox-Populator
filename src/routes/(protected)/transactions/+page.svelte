@@ -52,11 +52,11 @@
 </script>
 
 <div class="p-8 w-full max-w-6xl mx-auto">
-	<h1 class="h1 mb-2">Transactions</h1>
-	<p class="text-surface-400 mb-6">Select an account to view its transactions</p>
+	<h1 class="h1 mb-2 text-center">Transactions</h1>
+	<p class="text-surface-400 mb-6 text-center">Select an account to view its transactions</p>
 
-	<!-- Account Selector -->
-	<div class="mb-8">
+	<!-- Account Selector - Centered -->
+	<div class="mb-8 flex flex-col items-center">
 		<label for="account-select" class="block text-sm text-surface-400 mb-2">Select Account</label>
 		<div class="relative w-full max-w-md">
 			<select
@@ -77,6 +77,24 @@
 			</select>
 			<ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 size-5 text-surface-400 pointer-events-none" />
 		</div>
+
+		{#if data.selectedAccount}
+			<!-- Selected Account Info - Centered below dropdown -->
+			<div class="card p-4 preset-filled-surface-50-950 mt-4 w-full max-w-md">
+				<div class="flex items-center justify-center gap-3">
+					<Wallet class="size-6 text-secondary-500" />
+					<div class="text-center">
+						<p class="font-semibold">{data.selectedAccount.label || 'Unnamed Account'}</p>
+						<p class="text-sm text-surface-400 font-mono">{data.selectedAccount.id}</p>
+						{#if data.selectedAccount.balance}
+							<p class="text-xl font-semibold text-primary-400 mt-1">
+								{data.selectedAccount.balance.amount} {data.selectedAccount.balance.currency}
+							</p>
+						{/if}
+					</div>
+				</div>
+			</div>
+		{/if}
 	</div>
 
 	{#if data.accounts.length === 0}
@@ -86,24 +104,6 @@
 			<a href="/populate" class="btn preset-filled-primary-500 mt-4">Populate Sandbox</a>
 		</div>
 	{:else if data.selectedAccount}
-		<!-- Selected Account Info -->
-		<div class="card p-4 preset-filled-surface-50-950 mb-6">
-			<div class="flex items-center gap-3">
-				<Wallet class="size-6 text-secondary-500" />
-				<div>
-					<p class="font-semibold">{data.selectedAccount.label || 'Unnamed Account'}</p>
-					<p class="text-sm text-surface-400 font-mono">{data.selectedAccount.id}</p>
-				</div>
-				{#if data.selectedAccount.balance}
-					<div class="ml-auto text-right">
-						<p class="text-xl font-semibold text-primary-400">
-							{data.selectedAccount.balance.amount} {data.selectedAccount.balance.currency}
-						</p>
-						<p class="text-xs text-surface-400">Current Balance</p>
-					</div>
-				{/if}
-			</div>
-		</div>
 
 		<!-- Transactions Split View -->
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -121,23 +121,37 @@
 						</div>
 					{:else}
 						{#each incomingTransactions as txn}
-							<a
-								href={getTransactionUrl(data.selectedAccount.bank_id, data.selectedAccount.id, txn.id)}
-								class="p-4 flex items-center justify-between hover:bg-surface-800/50 transition-colors group"
-							>
-								<div class="min-w-0 flex-1">
-									<p class="text-sm truncate group-hover:text-primary-400 transition-colors">
-										{txn.details?.description || 'No description'}
-									</p>
-									<p class="text-xs text-surface-400">{formatDate(txn.details?.completed)}</p>
-								</div>
-								<div class="flex items-center gap-2 ml-3">
-									<span class="font-semibold text-success-400">
-										+{txn.details?.value?.amount} {txn.details?.value?.currency}
-									</span>
-									<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
-								</div>
-							</a>
+							<div class="p-4 hover:bg-surface-800/50 transition-colors group">
+								<a
+									href={getTransactionUrl(data.selectedAccount.bank_id, data.selectedAccount.id, txn.id)}
+									class="flex items-center justify-between"
+								>
+									<div class="min-w-0 flex-1">
+										<p class="text-sm truncate group-hover:text-primary-400 transition-colors">
+											{txn.details?.description || 'No description'}
+										</p>
+										<p class="text-xs text-surface-400">{formatDate(txn.details?.completed)}</p>
+									</div>
+									<div class="flex items-center gap-2 ml-3">
+										<span class="font-semibold text-success-400">
+											+{txn.details?.value?.amount} {txn.details?.value?.currency}
+										</span>
+										<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
+									</div>
+								</a>
+								{#if txn.other_account?.id}
+									<div class="mt-2 text-xs">
+										<span class="text-surface-500">From: </span>
+										<a
+											href="/transactions?bank={txn.other_account.bank_routing?.address || data.selectedAccount.bank_id}&account={txn.other_account.id}"
+											class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
+											onclick={(e) => e.stopPropagation()}
+										>
+											{txn.other_account.id}
+										</a>
+									</div>
+								{/if}
+							</div>
 						{/each}
 					{/if}
 				</div>
@@ -157,23 +171,37 @@
 						</div>
 					{:else}
 						{#each outgoingTransactions as txn}
-							<a
-								href={getTransactionUrl(data.selectedAccount.bank_id, data.selectedAccount.id, txn.id)}
-								class="p-4 flex items-center justify-between hover:bg-surface-800/50 transition-colors group"
-							>
-								<div class="min-w-0 flex-1">
-									<p class="text-sm truncate group-hover:text-primary-400 transition-colors">
-										{txn.details?.description || 'No description'}
-									</p>
-									<p class="text-xs text-surface-400">{formatDate(txn.details?.completed)}</p>
-								</div>
-								<div class="flex items-center gap-2 ml-3">
-									<span class="font-semibold text-error-400">
-										{txn.details?.value?.amount} {txn.details?.value?.currency}
-									</span>
-									<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
-								</div>
-							</a>
+							<div class="p-4 hover:bg-surface-800/50 transition-colors group">
+								<a
+									href={getTransactionUrl(data.selectedAccount.bank_id, data.selectedAccount.id, txn.id)}
+									class="flex items-center justify-between"
+								>
+									<div class="min-w-0 flex-1">
+										<p class="text-sm truncate group-hover:text-primary-400 transition-colors">
+											{txn.details?.description || 'No description'}
+										</p>
+										<p class="text-xs text-surface-400">{formatDate(txn.details?.completed)}</p>
+									</div>
+									<div class="flex items-center gap-2 ml-3">
+										<span class="font-semibold text-error-400">
+											{txn.details?.value?.amount} {txn.details?.value?.currency}
+										</span>
+										<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
+									</div>
+								</a>
+								{#if txn.other_account?.id}
+									<div class="mt-2 text-xs text-right">
+										<span class="text-surface-500">To: </span>
+										<a
+											href="/transactions?bank={txn.other_account.bank_routing?.address || data.selectedAccount.bank_id}&account={txn.other_account.id}"
+											class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
+											onclick={(e) => e.stopPropagation()}
+										>
+											{txn.other_account.id}
+										</a>
+									</div>
+								{/if}
+							</div>
 						{/each}
 					{/if}
 				</div>
