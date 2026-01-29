@@ -249,7 +249,7 @@ export const actions: Actions = {
 					for (let month = 0; month < 12; month++) {
 						const date = new Date(now);
 						date.setMonth(date.getMonth() - month);
-						const dateStr = date.toISOString();
+						const dateStr = date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 
 						// Random transaction between accounts
 						const fromIdx = Math.floor(Math.random() * account_ids.length);
@@ -280,7 +280,9 @@ export const actions: Actions = {
 								amount: `${amount} ${currency}`
 							});
 						} catch (e: any) {
-							logger.debug(`Transaction error: ${e.message}`);
+							const errorMsg = `Transaction at ${bank_id}: ${e.message}`;
+							logger.error(errorMsg);
+							results.errors.push(errorMsg);
 						}
 						await delay(100);
 					}
