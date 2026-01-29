@@ -28,7 +28,9 @@
 			login: 'Login',
 			logout: 'Logout',
 			user: 'My Account',
-			accounts: 'Accounts'
+			accounts: 'Accounts',
+			banks: 'Banks',
+			transactions: 'Transactions'
 		};
 
 		let path = '';

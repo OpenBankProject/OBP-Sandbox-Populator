@@ -201,6 +201,25 @@ export class OBPClient {
 	}
 
 	// FX Rate endpoints
+	async getCurrenciesAtBank(bankId: string): Promise<string[]> {
+		const response = await fetch(this.url(`/banks/${bankId}/currencies`), {
+			headers: this.getHeaders()
+		});
+		const data = await this.handleResponse<{ currencies: Array<{ currency_code: string }> }>(response);
+		return data.currencies.map(c => c.currency_code);
+	}
+
+	async getFxRate(bankId: string, fromCurrency: string, toCurrency: string): Promise<FxRate | null> {
+		try {
+			const response = await fetch(this.url(`/banks/${bankId}/fx/${fromCurrency}/${toCurrency}`), {
+				headers: this.getHeaders()
+			});
+			return await this.handleResponse<FxRate>(response);
+		} catch {
+			return null;
+		}
+	}
+
 	async createFxRate(bankId: string, payload: CreateFxRatePayload): Promise<FxRate> {
 		const body: Record<string, any> = {
 			bank_id: bankId,
@@ -246,7 +265,38 @@ export class OBPClient {
 		return this.handleResponse<Transaction>(response);
 	}
 
+	// Transaction endpoints
+	async getTransactionsForAccount(
+		bankId: string,
+		accountId: string,
+		viewId: string = 'owner'
+	): Promise<Transaction[]> {
+		const response = await fetch(
+			this.url(`/banks/${bankId}/accounts/${accountId}/${viewId}/transactions`),
+			{
+				headers: this.getHeaders()
+			}
+		);
+		const data = await this.handleResponse<{ transactions: Transaction[] }>(response);
+		return data.transactions || [];
+	}
+
 	// Transaction Request endpoints
+	async getTransactionRequestsForAccount(
+		bankId: string,
+		accountId: string,
+		viewId: string = 'owner'
+	): Promise<TransactionRequest[]> {
+		const response = await fetch(
+			this.url(`/banks/${bankId}/accounts/${accountId}/${viewId}/transaction-requests`),
+			{
+				headers: this.getHeaders()
+			}
+		);
+		const data = await this.handleResponse<{ transaction_requests: TransactionRequest[] }>(response);
+		return data.transaction_requests || [];
+	}
+
 	async createTransactionRequest(
 		fromBankId: string,
 		fromAccountId: string,

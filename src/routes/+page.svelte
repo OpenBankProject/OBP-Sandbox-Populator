@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Database, Play, Shield, Zap } from '@lucide/svelte';
+	import { Database, Play, Zap } from '@lucide/svelte';
 	import type { RootLayoutData } from './+layout.server';
 
 	let { data }: { data: RootLayoutData } = $props();
@@ -16,36 +16,30 @@
 			counterparties, FX rates, and historical transactions.
 		</p>
 
-		<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+			<a href="/banks" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
+				<Zap class="size-8 mx-auto mb-2 text-secondary-500" />
+				<h3 class="font-semibold mb-1">Banks</h3>
+				<p class="text-sm text-surface-400">View banks and their FX rates</p>
+			</a>
+
 			<a href="/accounts" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
 				<Database class="size-8 mx-auto mb-2 text-secondary-500" />
 				<h3 class="font-semibold mb-1">Accounts</h3>
 				<p class="text-sm text-surface-400">View my accounts across all banks</p>
 			</a>
 
-			<a href="/populate" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
-				<Shield class="size-8 mx-auto mb-2 text-secondary-500" />
-				<h3 class="font-semibold mb-1">Counterparties</h3>
-				<p class="text-sm text-surface-400">Add sample businesses as counterparties</p>
-			</a>
-
-			<a href="/populate" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
-				<Zap class="size-8 mx-auto mb-2 text-secondary-500" />
-				<h3 class="font-semibold mb-1">FX Rates</h3>
-				<p class="text-sm text-surface-400">Configure exchange rates between currencies</p>
-			</a>
-
-			<a href="/populate" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
+			<a href="/transactions" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
 				<Play class="size-8 mx-auto mb-2 text-secondary-500" />
 				<h3 class="font-semibold mb-1">Transactions</h3>
-				<p class="text-sm text-surface-400">Generate historical transaction data</p>
+				<p class="text-sm text-surface-400">View transactions and transaction requests</p>
 			</a>
 		</div>
 
 		{#if isAuthenticated}
 			<a href="/populate" class="btn preset-filled-primary-500 text-lg px-8 py-3">
 				<Database class="size-5 mr-2" />
-				Start Populating
+				Populate
 			</a>
 		{:else}
 			<div class="space-y-4">

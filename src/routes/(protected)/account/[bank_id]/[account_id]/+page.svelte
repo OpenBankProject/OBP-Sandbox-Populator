@@ -1,17 +1,21 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import { ArrowLeft, Wallet, Hash, Building, CreditCard, Tag, Route } from '@lucide/svelte';
+	import { ArrowLeft, Wallet, Hash, Building, CreditCard, Tag, Route, Users, ExternalLink } from '@lucide/svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	const account = data.account;
+
+	function getCounterpartyUrl(counterparty_id: string) {
+		return `/counterparty/${data.bank_id}/${data.account_id}/${counterparty_id}`;
+	}
 </script>
 
 <div class="p-8 w-full max-w-4xl mx-auto">
 	<div class="mb-6">
-		<a href="/populate" class="text-primary-400 hover:text-primary-300 flex items-center gap-1 text-sm">
+		<a href="/accounts" class="text-primary-400 hover:text-primary-300 flex items-center gap-1 text-sm">
 			<ArrowLeft class="size-4" />
-			Back to Populate
+			Back to Accounts
 		</a>
 	</div>
 
@@ -91,6 +95,35 @@
 				</div>
 			</div>
 		{/if}
+
+		<!-- Counterparties -->
+		<div class="border-t border-surface-700 pt-6">
+			<div class="flex items-center gap-2 mb-4">
+				<Users class="size-5 text-secondary-500" />
+				<h2 class="h4">Counterparties</h2>
+				<span class="text-sm text-surface-400">({data.counterparties.length})</span>
+			</div>
+			{#if data.counterparties.length > 0}
+				<div class="space-y-2 max-h-64 overflow-y-auto">
+					{#each data.counterparties as cp}
+						<a
+							href={getCounterpartyUrl(cp.counterparty_id)}
+							class="p-3 rounded-lg bg-surface-800/50 hover:bg-surface-700/50 flex items-center justify-between group transition-colors"
+						>
+							<div>
+								<p class="font-medium group-hover:text-primary-400 transition-colors">{cp.name}</p>
+								{#if cp.description}
+									<p class="text-xs text-surface-400 truncate max-w-md">{cp.description}</p>
+								{/if}
+							</div>
+							<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
+						</a>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-surface-400 text-sm">No counterparties configured for this account.</p>
+			{/if}
+		</div>
 
 		<!-- Views -->
 		{#if account.views_available && account.views_available.length > 0}

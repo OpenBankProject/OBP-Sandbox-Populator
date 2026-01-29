@@ -14,28 +14,47 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	const { bank_id, account_id } = params;
 
-	const url = `${env.PUBLIC_OBP_BASE_URL}/obp/v6.0.0/banks/${bank_id}/accounts/${account_id}/owner/account`;
+	const headers = {
+		'Content-Type': 'application/json',
+		Authorization: `Bearer ${accessToken}`
+	};
 
-	logger.info(`Fetching account: ${url}`);
+	// Fetch account details
+	const accountUrl = `${env.PUBLIC_OBP_BASE_URL}/obp/v6.0.0/banks/${bank_id}/accounts/${account_id}/owner/account`;
+	logger.info(`Fetching account: ${accountUrl}`);
 
-	const response = await fetch(url, {
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${accessToken}`
-		}
-	});
+	const accountResponse = await fetch(accountUrl, { headers });
 
-	if (!response.ok) {
-		const errorData = await response.json().catch(() => ({}));
-		logger.error(`Failed to fetch account: ${response.status}`, errorData);
-		throw error(response.status, errorData.message || 'Failed to fetch account');
+	if (!accountResponse.ok) {
+		const errorData = await accountResponse.json().catch(() => ({}));
+		logger.error(`Failed to fetch account: ${accountResponse.status}`, errorData);
+		throw error(accountResponse.status, errorData.message || 'Failed to fetch account');
 	}
 
-	const account = await response.json();
+	const account = await accountResponse.json();
 	logger.debug('Account data:', account);
+
+	// Fetch counterparties for this account
+	const counterpartiesUrl = `${env.PUBLIC_OBP_BASE_URL}/obp/v6.0.0/banks/${bank_id}/accounts/${account_id}/owner/counterparties`;
+	logger.info(`Fetching counterparties: ${counterpartiesUrl}`);
+
+	let counterparties: any[] = [];
+	try {
+		const counterpartiesResponse = await fetch(counterpartiesUrl, { headers });
+		if (counterpartiesResponse.ok) {
+			const data = await counterpartiesResponse.json();
+			counterparties = data.counterparties || [];
+			logger.debug(`Found ${counterparties.length} counterparties`);
+		} else {
+			logger.warn(`Failed to fetch counterparties: ${counterpartiesResponse.status}`);
+		}
+	} catch (e) {
+		logger.warn('Error fetching counterparties:', e);
+	}
 
 	return {
 		account,
+		counterparties,
 		bank_id,
 		account_id
 	};
