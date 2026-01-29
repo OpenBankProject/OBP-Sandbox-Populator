@@ -49,7 +49,7 @@ export function GET(event: RequestEvent) {
 	try {
 		const url = oauthClient.createAuthorizationURL(auth_endpoint, encodedState, scopes);
 
-		event.cookies.set('sandbox_populator_oauth_state', encodedState, {
+		event.cookies.set('obp_oauth_state', encodedState, {
 			httpOnly: true,
 			maxAge: 60 * 10,
 			secure: import.meta.env.PROD,

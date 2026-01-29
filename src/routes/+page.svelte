@@ -8,7 +8,7 @@
 </script>
 
 <div class="flex h-full w-full items-center justify-center p-8">
-	<div class="max-w-2xl text-center">
+	<div class="w-full text-center">
 		<h1 class="h1 mb-6">OBP Sandbox Populator</h1>
 
 		<p class="text-lg text-surface-300 mb-8">

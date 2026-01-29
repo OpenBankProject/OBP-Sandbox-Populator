@@ -1,5 +1,5 @@
 import { createLogger } from '$lib/utils/logger';
-const logger = createLogger('LoginCallback');
+const logger = createLogger('OBPLoginCallback');
 import { oauth2ProviderFactory } from '$lib/oauth/providerFactory';
 import type { OAuth2Tokens } from 'arctic';
 import type { RequestEvent } from '@sveltejs/kit';
@@ -13,7 +13,7 @@ export async function GET(event: RequestEvent): Promise<Response> {
 	if (oauthError) {
 		logger.warn(`OAuth error received: ${oauthError}`, errorDescription);
 
-		event.cookies.delete('sandbox_populator_oauth_state', {
+		event.cookies.delete('obp_oauth_state', {
 			path: '/'
 		});
 
@@ -42,7 +42,7 @@ export async function GET(event: RequestEvent): Promise<Response> {
 		});
 	}
 
-	const storedState = event.cookies.get('sandbox_populator_oauth_state');
+	const storedState = event.cookies.get('obp_oauth_state');
 	const code = event.url.searchParams.get('code');
 	const recievedState = event.url.searchParams.get('state');
 
@@ -131,7 +131,7 @@ export async function GET(event: RequestEvent): Promise<Response> {
 		const errorMessage = e?.message || 'Unknown error';
 		logger.error('Token exchange error details:', errorMessage);
 
-		event.cookies.delete('sandbox_populator_oauth_state', {
+		event.cookies.delete('obp_oauth_state', {
 			path: '/'
 		});
 
@@ -151,7 +151,7 @@ export async function GET(event: RequestEvent): Promise<Response> {
 		});
 	}
 
-	event.cookies.delete('sandbox_populator_oauth_state', {
+	event.cookies.delete('obp_oauth_state', {
 		path: '/'
 	});
 
@@ -172,7 +172,7 @@ export async function GET(event: RequestEvent): Promise<Response> {
 			`OBP current user request failed - Status: ${currentUserResponse.status}, Response: ${errorText}`
 		);
 
-		event.cookies.delete('sandbox_populator_oauth_state', {
+		event.cookies.delete('obp_oauth_state', {
 			path: '/'
 		});
 
@@ -210,7 +210,7 @@ export async function GET(event: RequestEvent): Promise<Response> {
 	} else {
 		logger.error('Invalid user data received from OBP - missing user_id or email:', user);
 
-		event.cookies.delete('sandbox_populator_oauth_state', {
+		event.cookies.delete('obp_oauth_state', {
 			path: '/'
 		});
 

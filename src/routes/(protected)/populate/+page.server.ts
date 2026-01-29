@@ -41,8 +41,8 @@ function delay(ms: number): Promise<void> {
 }
 
 function getUsernamePrefix(username: string): string {
-	// Truncate to 8 characters and lowercase
-	return username.slice(0, 8).toLowerCase();
+	// Lowercase and remove special characters, keep only alphanumeric
+	return username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
 }
 
 export const actions: Actions = {
@@ -70,18 +70,18 @@ export const actions: Actions = {
 		);
 
 		const results: {
-			banks: Array<{ id: string; name: string }>;
-			accounts: Array<{ id: string; bankId: string; label: string }>;
-			counterparties: number;
-			fxRates: number;
-			transactions: number;
+			banks: Array<{ bank_id: string; short_name: string; full_name: string }>;
+			accounts: Array<{ account_id: string; bank_id: string; label: string; currency: string }>;
+			counterparties: Array<{ name: string; bank_id: string; account_id: string }>;
+			fxRates: Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number }>;
+			transactions: Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string }>;
 			errors: string[];
 		} = {
 			banks: [],
 			accounts: [],
-			counterparties: 0,
-			fxRates: 0,
-			transactions: 0,
+			counterparties: [],
+			fxRates: [],
+			transactions: [],
 			errors: []
 		};
 
@@ -91,24 +91,30 @@ export const actions: Actions = {
 			// Create Banks
 			logger.info(`Creating ${numBanks} banks...`);
 			for (let i = 1; i <= numBanks; i++) {
-				const bankId = `${usernamePrefix}.bank${i}.bw`;
+				const bankId = `${usernamePrefix}_testbank_${i}`;
 				const bankName = `${user.username} Test Bank ${i}`;
 
+				const short_name = `TB${i}`;
 				try {
 					// Check if bank exists
 					const exists = await client.bankExists(bankId);
 					if (exists) {
 						logger.info(`Bank ${bankId} already exists, skipping`);
-						results.banks.push({ id: bankId, name: bankName });
+						results.banks.push({ bank_id: bankId, short_name, full_name: bankName });
 					} else {
 						const bank = await client.createBank({
 							bank_id: bankId,
 							full_name: bankName,
-							short_name: `TB${i}`,
+							short_name: short_name,
 							bank_code: `TB${i}BW`
 						});
-						results.banks.push({ id: bank.bank_id, name: bank.full_name });
-						logger.info(`Created bank: ${bank.bank_id}`);
+						logger.debug('Bank creation response:', JSON.stringify(bank));
+						results.banks.push({
+							bank_id: bank.id,
+							short_name: bank.short_name,
+							full_name: bank.full_name
+						});
+						logger.info(`Created bank: ${bank.id}`);
 					}
 				} catch (e: any) {
 					const errorMsg = `Failed to create bank ${bankId}: ${e.message}`;
@@ -123,21 +129,24 @@ export const actions: Actions = {
 			logger.info(`Creating ${numAccountsPerBank} accounts per bank...`);
 			for (const bank of results.banks) {
 				for (let j = 1; j <= numAccountsPerBank; j++) {
+					const label = `Account ${j}`;
 					try {
-						const account = await client.createAccount(bank.id, {
-							label: `Account ${j}`,
+						const account = await client.createAccount(bank.bank_id, {
+							label: label,
 							currency: currency,
 							balance: { amount: '0', currency: currency },
 							user_id: user.user_id
 						});
+						logger.debug('Account creation response:', JSON.stringify(account));
 						results.accounts.push({
-							id: account.account_id,
-							bankId: bank.id,
-							label: account.label
+							account_id: account.account_id,
+							bank_id: account.bank_id,
+							label: account.label,
+							currency: account.currency
 						});
-						logger.info(`Created account: ${account.account_id} at ${bank.id}`);
+						logger.info(`Created account: ${account.account_id} at ${bank.bank_id}`);
 					} catch (e: any) {
-						const errorMsg = `Failed to create account at ${bank.id}: ${e.message}`;
+						const errorMsg = `Failed to create account at ${bank.bank_id}: ${e.message}`;
 						logger.error(errorMsg);
 						results.errors.push(errorMsg);
 					}
@@ -154,8 +163,12 @@ export const actions: Actions = {
 				for (const business of businesses) {
 					try {
 						const payload = getBusinessForCounterparty(business, currency);
-						await client.createCounterparty(firstAccount.bankId, firstAccount.id, payload);
-						results.counterparties++;
+						await client.createCounterparty(firstAccount.bank_id, firstAccount.account_id, payload);
+						results.counterparties.push({
+							name: business.name,
+							bank_id: firstAccount.bank_id,
+							account_id: firstAccount.account_id
+						});
 						logger.info(`Created counterparty: ${business.name}`);
 					} catch (e: any) {
 						const errorMsg = `Failed to create counterparty ${business.name}: ${e.message}`;
@@ -172,28 +185,39 @@ export const actions: Actions = {
 				for (const bank of results.banks) {
 					for (const [targetCurrency, rate] of Object.entries(FX_RATES)) {
 						try {
-							await client.createFxRate(bank.id, {
+							await client.createFxRate(bank.bank_id, {
 								from_currency_code: currency,
 								to_currency_code: targetCurrency,
 								conversion_value: rate,
 								effective_date: new Date().toISOString()
 							});
+							results.fxRates.push({
+								bank_id: bank.bank_id,
+								from_currency: currency,
+								to_currency: targetCurrency,
+								rate: rate
+							});
 							// Also create reverse rate
-							await client.createFxRate(bank.id, {
+							await client.createFxRate(bank.bank_id, {
 								from_currency_code: targetCurrency,
 								to_currency_code: currency,
 								conversion_value: 1 / rate,
 								effective_date: new Date().toISOString()
 							});
-							results.fxRates += 2;
+							results.fxRates.push({
+								bank_id: bank.bank_id,
+								from_currency: targetCurrency,
+								to_currency: currency,
+								rate: parseFloat((1 / rate).toFixed(6))
+							});
 						} catch (e: any) {
 							// FX rate errors are common (duplicates), just log debug
-							logger.debug(`FX rate error for ${bank.id}: ${e.message}`);
+							logger.debug(`FX rate error for ${bank.bank_id}: ${e.message}`);
 						}
 						await delay(50);
 					}
 				}
-				logger.info(`Created ${results.fxRates} FX rates`);
+				logger.info(`Created ${results.fxRates.length} FX rates`);
 			}
 
 			// Create Historical Transactions
@@ -203,16 +227,16 @@ export const actions: Actions = {
 
 				// Group accounts by bank
 				for (const account of results.accounts) {
-					if (!bankAccounts[account.bankId]) {
-						bankAccounts[account.bankId] = [];
+					if (!bankAccounts[account.bank_id]) {
+						bankAccounts[account.bank_id] = [];
 					}
-					bankAccounts[account.bankId].push(account.id);
+					bankAccounts[account.bank_id].push(account.account_id);
 				}
 
 				// Create transactions within each bank
 				const now = new Date();
-				for (const [bankId, accountIds] of Object.entries(bankAccounts)) {
-					if (accountIds.length < 2) continue;
+				for (const [bank_id, account_ids] of Object.entries(bankAccounts)) {
+					if (account_ids.length < 2) continue;
 
 					// Create some transactions over the last 12 months
 					for (let month = 0; month < 12; month++) {
@@ -221,32 +245,40 @@ export const actions: Actions = {
 						const dateStr = date.toISOString();
 
 						// Random transaction between accounts
-						const fromIdx = Math.floor(Math.random() * accountIds.length);
-						let toIdx = Math.floor(Math.random() * accountIds.length);
+						const fromIdx = Math.floor(Math.random() * account_ids.length);
+						let toIdx = Math.floor(Math.random() * account_ids.length);
 						while (toIdx === fromIdx) {
-							toIdx = Math.floor(Math.random() * accountIds.length);
+							toIdx = Math.floor(Math.random() * account_ids.length);
 						}
 
 						try {
-							await client.createHistoricalTransaction(bankId, {
-								from_account_id: accountIds[fromIdx],
-								to_account_id: accountIds[toIdx],
+							const amount = (Math.random() * 1000 + 100).toFixed(2);
+							const txn = await client.createHistoricalTransaction(bank_id, {
+								from_account_id: account_ids[fromIdx],
+								to_account_id: account_ids[toIdx],
 								value: {
 									currency: currency,
-									amount: (Math.random() * 1000 + 100).toFixed(2)
+									amount: amount
 								},
 								description: `Monthly transfer ${month + 1}`,
 								posted: dateStr,
 								completed: dateStr
 							});
-							results.transactions++;
+							logger.debug('Transaction creation response:', JSON.stringify(txn));
+							results.transactions.push({
+								transaction_id: txn.transaction_id,
+								bank_id: bank_id,
+								from_account_id: account_ids[fromIdx],
+								to_account_id: account_ids[toIdx],
+								amount: `${amount} ${currency}`
+							});
 						} catch (e: any) {
 							logger.debug(`Transaction error: ${e.message}`);
 						}
 						await delay(100);
 					}
 				}
-				logger.info(`Created ${results.transactions} historical transactions`);
+				logger.info(`Created ${results.transactions.length} historical transactions`);
 			}
 
 			return {
