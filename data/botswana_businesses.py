@@ -197,9 +197,12 @@ def get_business_for_counterparty(business: dict, currency: str = "BWP") -> dict
     Returns:
         Dictionary formatted for OBP counterparty creation
     """
+    # Truncate description to max 36 characters (OBP limit)
+    description = business["description"][:36]
+
     return {
         "name": business["name"],
-        "description": f"{business['description']} - {business['category']} in {business['location']}",
+        "description": description,
         "currency": currency,
         "other_account_routing_scheme": "AccountNumber",
         "other_account_routing_address": business["account_number"],
