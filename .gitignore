@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python (for legacy scripts)
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -23,16 +19,10 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
-# PyInstaller
 *.manifest
 *.spec
-
-# Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
-# Unit test / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -45,11 +35,28 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# Node.js / SvelteKit
+node_modules/
+.svelte-kit/
+.vercel/
+.netlify/
+.output/
+
+# Build output
+build/
+
+# Environment variables
+.env
+.env.*
+!.env.example
 
 # Virtual environments
-.env
 .venv
-env/
 venv/
 ENV/
 env.bak/
@@ -68,14 +75,6 @@ venv.bak/
 # pyenv
 .python-version
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre
-.pyre/
-
 # OS
 .DS_Store
 Thumbs.db
@@ -84,3 +83,7 @@ Thumbs.db
 # Project specific
 *.log
 *.xlsx
+
+# Package manager locks (optional - uncomment if you want to track)
+# package-lock.json
+# pnpm-lock.yaml

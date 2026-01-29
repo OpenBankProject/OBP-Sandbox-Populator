@@ -22,11 +22,19 @@ def create_sandbox_actions_entity(client: OBPClient) -> dict:
         "has_personal_entity": True,
         "schema": {
             "description": "Tracks sandbox actions performed by users",
-            "required": ["action"],
+            "required": ["action", "timestamp"],
             "properties": {
                 "action": {
                     "type": "string",
                     "example": "created_bank"
+                },
+                "timestamp": {
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "details": {
+                    "type": "string",
+                    "example": "Created bank with 5 accounts"
                 }
             }
         }
