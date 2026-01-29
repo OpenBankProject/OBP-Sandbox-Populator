@@ -49,6 +49,24 @@
 	const currentSelectValue = $derived(
 		data.selectedAccount ? `${data.selectedAccount.bank_id}|${data.selectedAccount.id}` : ''
 	);
+
+	// Find the bank_id for an account by looking it up in the user's accounts
+	function getAccountLink(otherAccount: { id?: string; bank_id?: string } | undefined): { bankId: string; accountId: string } | null {
+		if (!otherAccount?.id) return null;
+
+		// First try direct bank_id if available
+		if (otherAccount.bank_id) {
+			return { bankId: otherAccount.bank_id, accountId: otherAccount.id };
+		}
+
+		// Otherwise look up in user's accounts
+		const found = data.accounts.find((a) => a.id === otherAccount.id);
+		if (found) {
+			return { bankId: found.bank_id, accountId: found.id };
+		}
+
+		return null;
+	}
 </script>
 
 <div class="p-8 w-full max-w-6xl mx-auto">
@@ -121,6 +139,7 @@
 						</div>
 					{:else}
 						{#each incomingTransactions as txn}
+							{@const link = getAccountLink(txn.other_account)}
 							<div class="p-4 hover:bg-surface-800/50 transition-colors group">
 								<a
 									href={getTransactionUrl(data.selectedAccount.bank_id, data.selectedAccount.id, txn.id)}
@@ -139,18 +158,23 @@
 										<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
 									</div>
 								</a>
-								{#if txn.other_account?.id}
-									<div class="mt-2 text-xs">
-										<span class="text-surface-500">From: </span>
-										<a
-											href="/transactions?bank={txn.other_account.bank_routing?.address || data.selectedAccount.bank_id}&account={txn.other_account.id}"
-											class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
-											onclick={(e) => e.stopPropagation()}
-										>
-											{txn.other_account.id}
-										</a>
-									</div>
-								{/if}
+							{#if link}
+								<div class="mt-2 text-xs">
+									<span class="text-surface-500">From: </span>
+									<a
+										href="/transactions?bank={link.bankId}&account={link.accountId}"
+										class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
+										onclick={(e) => e.stopPropagation()}
+									>
+										{link.accountId}
+									</a>
+								</div>
+							{:else if txn.other_account?.id}
+								<div class="mt-2 text-xs">
+									<span class="text-surface-500">From: </span>
+									<span class="font-mono text-surface-400">{txn.other_account.id}</span>
+								</div>
+							{/if}
 							</div>
 						{/each}
 					{/if}
@@ -171,6 +195,7 @@
 						</div>
 					{:else}
 						{#each outgoingTransactions as txn}
+							{@const link = getAccountLink(txn.other_account)}
 							<div class="p-4 hover:bg-surface-800/50 transition-colors group">
 								<a
 									href={getTransactionUrl(data.selectedAccount.bank_id, data.selectedAccount.id, txn.id)}
@@ -189,18 +214,23 @@
 										<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
 									</div>
 								</a>
-								{#if txn.other_account?.id}
-									<div class="mt-2 text-xs text-right">
-										<span class="text-surface-500">To: </span>
-										<a
-											href="/transactions?bank={txn.other_account.bank_routing?.address || data.selectedAccount.bank_id}&account={txn.other_account.id}"
-											class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
-											onclick={(e) => e.stopPropagation()}
-										>
-											{txn.other_account.id}
-										</a>
-									</div>
-								{/if}
+							{#if link}
+								<div class="mt-2 text-xs text-right">
+									<span class="text-surface-500">To: </span>
+									<a
+										href="/transactions?bank={link.bankId}&account={link.accountId}"
+										class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
+										onclick={(e) => e.stopPropagation()}
+									>
+										{link.accountId}
+									</a>
+								</div>
+							{:else if txn.other_account?.id}
+								<div class="mt-2 text-xs text-right">
+									<span class="text-surface-500">To: </span>
+									<span class="font-mono text-surface-400">{txn.other_account.id}</span>
+								</div>
+							{/if}
 							</div>
 						{/each}
 					{/if}
