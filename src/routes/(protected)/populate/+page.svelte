@@ -70,6 +70,14 @@
 	function getTransactionUrl(txn: { transaction_id: string; bank_id: string; from_account_id: string }) {
 		return `/transaction/${txn.bank_id}/${txn.from_account_id}/${txn.transaction_id}`;
 	}
+
+	function getAccountUrl(account: { account_id: string; bank_id: string }) {
+		return `/account/${account.bank_id}/${account.account_id}`;
+	}
+
+	function getCounterpartyUrl(cp: { counterparty_id: string; bank_id: string; account_id: string }) {
+		return `/counterparty/${cp.bank_id}/${cp.account_id}/${cp.counterparty_id}`;
+	}
 </script>
 
 <div class="p-8 w-full">
@@ -324,8 +332,14 @@
 						{#if form.results.accounts.length > 0}
 							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
 								{#each form.results.accounts as account}
-									<li>
-										<code class="text-xs bg-surface-700 px-1 rounded">{account.account_id}</code>
+									<li class="flex items-center gap-1">
+										<a
+											href={getAccountUrl(account)}
+											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+										>
+											<code class="text-xs bg-surface-700 px-1 rounded">{account.account_id}</code>
+											<ExternalLink class="size-3" />
+										</a>
 										<span class="text-surface-500 mx-1">|</span>
 										<span class="text-surface-300">{account.label}</span>
 										<span class="text-surface-500 mx-1">|</span>
@@ -361,7 +375,15 @@
 						{#if form.results.counterparties.length > 0}
 							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
 								{#each form.results.counterparties as cp}
-									<li>{cp.name}</li>
+									<li class="flex items-center gap-1">
+										<a
+											href={getCounterpartyUrl(cp)}
+											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+										>
+											<span>{cp.name}</span>
+											<ExternalLink class="size-3" />
+										</a>
+									</li>
 								{/each}
 							</ul>
 						{/if}

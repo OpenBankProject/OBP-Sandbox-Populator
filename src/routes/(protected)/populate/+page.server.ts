@@ -78,7 +78,7 @@ export const actions: Actions = {
 		const results: {
 			banks: Array<{ bank_id: string; bank_code: string; full_name: string }>;
 			accounts: Array<{ account_id: string; bank_id: string; label: string; currency: string }>;
-			counterparties: Array<{ name: string; bank_id: string; account_id: string }>;
+			counterparties: Array<{ counterparty_id: string; name: string; bank_id: string; account_id: string }>;
 			fxRates: Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number }>;
 			transactions: Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string }>;
 			errors: string[];
@@ -169,8 +169,9 @@ export const actions: Actions = {
 				for (const business of businesses) {
 					try {
 						const payload = getBusinessForCounterparty(business, currency);
-						await client.createCounterparty(firstAccount.bank_id, firstAccount.account_id, payload);
+						const counterparty = await client.createCounterparty(firstAccount.bank_id, firstAccount.account_id, payload);
 						results.counterparties.push({
+							counterparty_id: counterparty.counterparty_id,
 							name: business.name,
 							bank_id: firstAccount.bank_id,
 							account_id: firstAccount.account_id
