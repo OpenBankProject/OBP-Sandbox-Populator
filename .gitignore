@@ -1,89 +1,48 @@
-# Python (for legacy scripts)
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-*.manifest
-*.spec
-pip-log.txt
-pip-delete-this-directory.txt
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pyre/
-
-# Node.js / SvelteKit
+# Dependencies
 node_modules/
-.svelte-kit/
-.vercel/
-.netlify/
-.output/
 
 # Build output
+.svelte-kit/
 build/
+dist/
 
 # Environment variables
 .env
 .env.*
 !.env.example
 
-# Virtual environments
-.venv
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# IDE
+# IDE / Editor
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
 # OS
 .DS_Store
 Thumbs.db
-.~lock.*
 
-# Project specific
+# Logs
 *.log
-*.xlsx
 
-# Package manager locks (optional - uncomment if you want to track)
-# package-lock.json
-# pnpm-lock.yaml
+# Deployment
+.vercel/
+.netlify/
+.output/
+
+# Type checking
+.tsbuildinfo
+
+# Testing
+coverage/
+.nyc_output/
+
+# Python (legacy scripts)
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Misc
+*.local
