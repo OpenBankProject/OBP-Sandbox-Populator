@@ -116,6 +116,14 @@ export class OBPClient {
 	}
 
 	// Account endpoints
+	async getMyAccounts(): Promise<Account[]> {
+		const response = await fetch(this.url('/my/accounts'), {
+			headers: this.getHeaders()
+		});
+		const data = await this.handleResponse<{ accounts: Account[] }>(response);
+		return data.accounts;
+	}
+
 	async getAccountsAtBank(bankId: string): Promise<AccountsResponse> {
 		const response = await fetch(this.url(`/banks/${bankId}/accounts`), {
 			headers: this.getHeaders()

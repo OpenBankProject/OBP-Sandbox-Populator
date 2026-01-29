@@ -27,7 +27,8 @@
 			populate: 'Populate Sandbox',
 			login: 'Login',
 			logout: 'Logout',
-			user: 'My Account'
+			user: 'My Account',
+			accounts: 'Accounts'
 		};
 
 		let path = '';

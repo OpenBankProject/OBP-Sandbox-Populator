@@ -17,10 +17,10 @@
 		</p>
 
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-			<a href="/populate" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
+			<a href="/accounts" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
 				<Database class="size-8 mx-auto mb-2 text-secondary-500" />
-				<h3 class="font-semibold mb-1">Banks & Accounts</h3>
-				<p class="text-sm text-surface-400">Create multiple banks with accounts for testing</p>
+				<h3 class="font-semibold mb-1">Accounts</h3>
+				<p class="text-sm text-surface-400">View my accounts across all banks</p>
 			</a>
 
 			<a href="/populate" class="card p-4 preset-filled-surface-50-950 hover:preset-filled-surface-100-900 transition-colors">
