@@ -40,9 +40,14 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function removeVowels(str: string): string {
+	return str.replace(/[aeiou]/gi, '');
+}
+
 function getUsernamePrefix(username: string): string {
-	// Lowercase and remove special characters, keep only alphanumeric
-	return username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+	// Lowercase, remove special characters, keep only alphanumeric, remove vowels
+	const cleaned = username.toLowerCase().replace(/[^a-z0-9]/g, '');
+	return removeVowels(cleaned).slice(0, 4);
 }
 
 export const actions: Actions = {
@@ -65,12 +70,12 @@ export const actions: Actions = {
 
 		const client = new OBPClient(
 			env.PUBLIC_OBP_BASE_URL,
-			'v5.1.0',
+			'v6.0.0',
 			accessToken
 		);
 
 		const results: {
-			banks: Array<{ bank_id: string; short_name: string; full_name: string }>;
+			banks: Array<{ bank_id: string; bank_code: string; full_name: string }>;
 			accounts: Array<{ account_id: string; bank_id: string; label: string; currency: string }>;
 			counterparties: Array<{ name: string; bank_id: string; account_id: string }>;
 			fxRates: Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number }>;
@@ -91,30 +96,30 @@ export const actions: Actions = {
 			// Create Banks
 			logger.info(`Creating ${numBanks} banks...`);
 			for (let i = 1; i <= numBanks; i++) {
-				const bankId = `${usernamePrefix}_testbank_${i}`;
+				const bankId = `${usernamePrefix}.bnk.${i}`;
 				const bankName = `${user.username} Test Bank ${i}`;
 
-				const short_name = `TB${i}`;
+				const bank_code = `TB${i}BW`;
 				try {
 					// Check if bank exists
 					const exists = await client.bankExists(bankId);
 					if (exists) {
 						logger.info(`Bank ${bankId} already exists, skipping`);
-						results.banks.push({ bank_id: bankId, short_name, full_name: bankName });
+						results.banks.push({ bank_id: bankId, bank_code, full_name: bankName });
 					} else {
 						const bank = await client.createBank({
 							bank_id: bankId,
 							full_name: bankName,
-							short_name: short_name,
-							bank_code: `TB${i}BW`
+							short_name: `TB${i}`,
+							bank_code: bank_code
 						});
 						logger.debug('Bank creation response:', JSON.stringify(bank));
 						results.banks.push({
-							bank_id: bank.id,
-							short_name: bank.short_name,
+							bank_id: bank.bank_id,
+							bank_code: bank.bank_code,
 							full_name: bank.full_name
 						});
-						logger.info(`Created bank: ${bank.id}`);
+						logger.info(`Created bank: ${bank.bank_id}`);
 					}
 				} catch (e: any) {
 					const errorMsg = `Failed to create bank ${bankId}: ${e.message}`;
@@ -140,7 +145,7 @@ export const actions: Actions = {
 						logger.debug('Account creation response:', JSON.stringify(account));
 						results.accounts.push({
 							account_id: account.account_id,
-							bank_id: account.bank_id,
+							bank_id: bank.bank_id,
 							label: account.label,
 							currency: account.currency
 						});
@@ -185,11 +190,12 @@ export const actions: Actions = {
 				for (const bank of results.banks) {
 					for (const [targetCurrency, rate] of Object.entries(FX_RATES)) {
 						try {
+							const effectiveDate = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 							await client.createFxRate(bank.bank_id, {
 								from_currency_code: currency,
 								to_currency_code: targetCurrency,
 								conversion_value: rate,
-								effective_date: new Date().toISOString()
+								effective_date: effectiveDate
 							});
 							results.fxRates.push({
 								bank_id: bank.bank_id,
@@ -202,7 +208,7 @@ export const actions: Actions = {
 								from_currency_code: targetCurrency,
 								to_currency_code: currency,
 								conversion_value: 1 / rate,
-								effective_date: new Date().toISOString()
+								effective_date: effectiveDate
 							});
 							results.fxRates.push({
 								bank_id: bank.bank_id,
@@ -211,8 +217,9 @@ export const actions: Actions = {
 								rate: parseFloat((1 / rate).toFixed(6))
 							});
 						} catch (e: any) {
-							// FX rate errors are common (duplicates), just log debug
-							logger.debug(`FX rate error for ${bank.bank_id}: ${e.message}`);
+							const errorMsg = `FX rate ${currency}→${targetCurrency} at ${bank.bank_id}: ${e.message}`;
+							logger.error(errorMsg);
+							results.errors.push(errorMsg);
 						}
 						await delay(50);
 					}

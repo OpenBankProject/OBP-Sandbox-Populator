@@ -38,7 +38,7 @@
 
 	function formatBanks() {
 		if (!form?.results?.banks) return '';
-		return form.results.banks.map(b => `bank_id: ${b.bank_id}, short_name: ${b.short_name}`).join('\n');
+		return form.results.banks.map(b => `bank_id: ${b.bank_id}, bank_code: ${b.bank_code}`).join('\n');
 	}
 
 	function formatAccounts() {
@@ -260,7 +260,7 @@
 									<li>
 										<code class="text-xs bg-surface-700 px-1 rounded">{bank.bank_id}</code>
 										<span class="text-surface-500 mx-1">|</span>
-										<span class="text-surface-300">{bank.short_name}</span>
+										<span class="text-surface-300">{bank.bank_code}</span>
 									</li>
 								{/each}
 							</ul>
