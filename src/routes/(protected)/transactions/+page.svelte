@@ -158,23 +158,22 @@
 										<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
 									</div>
 								</a>
-							{#if link}
 								<div class="mt-2 text-xs">
 									<span class="text-surface-500">From: </span>
-									<a
-										href="/transactions?bank={link.bankId}&account={link.accountId}"
-										class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
-										onclick={(e) => e.stopPropagation()}
-									>
-										{link.accountId}
-									</a>
+									{#if link}
+										<a
+											href="/transactions?bank={link.bankId}&account={link.accountId}"
+											class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
+											onclick={(e) => e.stopPropagation()}
+										>
+											{link.bankId} / {link.accountId}
+										</a>
+									{:else}
+										<span class="font-mono text-surface-400">
+											{txn.other_account?.bank_id || 'no bank_id'} / {txn.other_account?.id || 'no id'}
+										</span>
+									{/if}
 								</div>
-							{:else if txn.other_account?.id}
-								<div class="mt-2 text-xs">
-									<span class="text-surface-500">From: </span>
-									<span class="font-mono text-surface-400">{txn.other_account.id}</span>
-								</div>
-							{/if}
 							</div>
 						{/each}
 					{/if}
@@ -214,23 +213,22 @@
 										<ExternalLink class="size-4 text-surface-500 group-hover:text-primary-400 transition-colors" />
 									</div>
 								</a>
-							{#if link}
 								<div class="mt-2 text-xs text-right">
 									<span class="text-surface-500">To: </span>
-									<a
-										href="/transactions?bank={link.bankId}&account={link.accountId}"
-										class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
-										onclick={(e) => e.stopPropagation()}
-									>
-										{link.accountId}
-									</a>
+									{#if link}
+										<a
+											href="/transactions?bank={link.bankId}&account={link.accountId}"
+											class="font-mono text-primary-400 hover:text-primary-300 hover:underline"
+											onclick={(e) => e.stopPropagation()}
+										>
+											{link.bankId} / {link.accountId}
+										</a>
+									{:else}
+										<span class="font-mono text-surface-400">
+											{txn.other_account?.bank_id || 'no bank_id'} / {txn.other_account?.id || 'no id'}
+										</span>
+									{/if}
 								</div>
-							{:else if txn.other_account?.id}
-								<div class="mt-2 text-xs text-right">
-									<span class="text-surface-500">To: </span>
-									<span class="font-mono text-surface-400">{txn.other_account.id}</span>
-								</div>
-							{/if}
 							</div>
 						{/each}
 					{/if}
