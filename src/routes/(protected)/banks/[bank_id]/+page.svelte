@@ -16,9 +16,9 @@
 	{#if data.bank}
 		<div class="flex items-center gap-3 mb-2">
 			<Building class="size-8 text-secondary-500" />
-			<h1 class="h1">{data.bank.full_name}</h1>
+			<h1 class="h1 font-mono">{data.bank_id}</h1>
 		</div>
-		<p class="text-surface-400 mb-8 font-mono">{data.bank_id}</p>
+		<p class="text-surface-400 mb-8">{data.bank.full_name}</p>
 
 		<div class="card p-6 preset-filled-surface-50-950 mb-6">
 			<h2 class="h3 mb-4 flex items-center gap-2">
