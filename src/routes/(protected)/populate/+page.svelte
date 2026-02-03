@@ -82,6 +82,43 @@
 		return `/account/${account.bank_id}/${account.account_id}`;
 	}
 
+	// Check if there's any existing data
+	function hasExistingData() {
+		return data.existing && (
+			data.existing.banks.length > 0 ||
+			data.existing.accounts.length > 0 ||
+			data.existing.counterparties.length > 0 ||
+			data.existing.fxRates.length > 0 ||
+			data.existing.transactions.length > 0
+		);
+	}
+
+	// Format functions for existing data
+	function formatExistingBanks() {
+		if (!data.existing?.banks) return '';
+		return data.existing.banks.map(b => `bank_id: ${b.bank_id}, bank_code: ${b.bank_code}`).join('\n');
+	}
+
+	function formatExistingAccounts() {
+		if (!data.existing?.accounts) return '';
+		return data.existing.accounts.map(a => `account_id: ${a.account_id}, label: ${a.label}, currency: ${a.currency}`).join('\n');
+	}
+
+	function formatExistingCounterparties() {
+		if (!data.existing?.counterparties) return '';
+		return data.existing.counterparties.map(c => `name: ${c.name}`).join('\n');
+	}
+
+	function formatExistingFxRates() {
+		if (!data.existing?.fxRates) return '';
+		return data.existing.fxRates.map(fx => `${fx.from_currency} → ${fx.to_currency}: ${fx.rate}`).join('\n');
+	}
+
+	function formatExistingTransactions() {
+		if (!data.existing?.transactions) return '';
+		return data.existing.transactions.map(t => `transaction_id: ${t.transaction_id}, amount: ${t.amount}`).join('\n');
+	}
+
 	function getCounterpartyUrl(cp: { counterparty_id: string; bank_id: string; account_id: string }) {
 		return `/counterparty/${cp.bank_id}/${cp.account_id}/${cp.counterparty_id}`;
 	}
@@ -115,68 +152,66 @@
 				}}
 				class="space-y-4"
 			>
-				<!-- Bank ID Prefix -->
-				<div>
-					<label for="bankIdPrefix" class="block text-sm font-medium mb-1">Bank ID Prefix</label>
-					<input
-						type="text"
-						id="bankIdPrefix"
-						name="bankIdPrefix"
-						bind:value={bankIdPrefix}
-						class="input w-full"
-						disabled={isLoading}
-					/>
-					<p class="text-xs text-surface-500 mt-1">Banks will be: <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.1</code>, <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.2</code>, ...</p>
+				<!-- Bank ID Prefix & Number of Banks -->
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label for="bankIdPrefix" class="block text-sm font-medium mb-1">Bank ID Prefix</label>
+						<input
+							type="text"
+							id="bankIdPrefix"
+							name="bankIdPrefix"
+							bind:value={bankIdPrefix}
+							class="input w-full"
+							disabled={isLoading}
+						/>
+					</div>
+					<div>
+						<label for="numBanks" class="block text-sm font-medium mb-1">Number of Banks</label>
+						<input
+							type="number"
+							id="numBanks"
+							name="numBanks"
+							bind:value={numBanks}
+							min="1"
+							max="5"
+							class="input w-full"
+							disabled={isLoading}
+						/>
+					</div>
 				</div>
+				<p class="text-xs text-surface-500 -mt-2">Banks will be: <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.1</code>, <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.2</code>, ...</p>
 
-				<!-- Number of Banks -->
-				<div>
-					<label for="numBanks" class="block text-sm font-medium mb-1">Number of Banks</label>
-					<input
-						type="number"
-						id="numBanks"
-						name="numBanks"
-						bind:value={numBanks}
-						min="1"
-						max="5"
-						class="input w-full"
-						disabled={isLoading}
-					/>
-				</div>
-
-				<!-- Accounts per Bank -->
-				<div>
-					<label for="numAccountsPerBank" class="block text-sm font-medium mb-1"
-						>Accounts per Bank</label
-					>
-					<input
-						type="number"
-						id="numAccountsPerBank"
-						name="numAccountsPerBank"
-						bind:value={numAccountsPerBank}
-						min="1"
-						max="10"
-						class="input w-full"
-						disabled={isLoading}
-					/>
-				</div>
-
-				<!-- Currency -->
-				<div>
-					<label for="currency" class="block text-sm font-medium mb-1">Currency</label>
-					<select
-						id="currency"
-						name="currency"
-						bind:value={currency}
-						class="select w-full"
-						disabled={isLoading}
-					>
-						<option value="BWP">BWP - Botswana Pula</option>
-						<option value="USD">USD - US Dollar</option>
-						<option value="EUR">EUR - Euro</option>
-						<option value="GBP">GBP - British Pound</option>
-						<option value="ZAR">ZAR - South African Rand</option>
-					</select>
+				<!-- Currency & Accounts per Bank -->
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label for="currency" class="block text-sm font-medium mb-1">Currency</label>
+						<select
+							id="currency"
+							name="currency"
+							bind:value={currency}
+							class="select w-full"
+							disabled={isLoading}
+						>
+							<option value="BWP">BWP - Botswana Pula</option>
+							<option value="USD">USD - US Dollar</option>
+							<option value="EUR">EUR - Euro</option>
+							<option value="GBP">GBP - British Pound</option>
+							<option value="ZAR">ZAR - South African Rand</option>
+						</select>
+					</div>
+					<div>
+						<label for="numAccountsPerBank" class="block text-sm font-medium mb-1">Accounts per Bank</label>
+						<input
+							type="number"
+							id="numAccountsPerBank"
+							name="numAccountsPerBank"
+							bind:value={numAccountsPerBank}
+							min="1"
+							max="10"
+							class="input w-full"
+							disabled={isLoading}
+						/>
+					</div>
 				</div>
 
 				<hr class="border-surface-700" />
@@ -249,12 +284,17 @@
 			<h2 class="h3 mb-4 flex items-center gap-2">
 				{#if form?.success}
 					<CheckCircle class="size-5 text-success-500" />
+					Results
 				{:else if form?.error}
 					<XCircle class="size-5 text-error-500" />
+					Results
+				{:else if hasExistingData()}
+					<Database class="size-5 text-secondary-500" />
+					Existing Data
 				{:else}
 					<Database class="size-5 text-surface-500" />
+					Results
 				{/if}
-				Results
 			</h2>
 
 			{#if isLoading}
@@ -586,11 +626,205 @@
 				<div class="p-4 rounded-lg bg-error-900/30 border border-error-700">
 					<p class="text-error-400">{form.error}</p>
 				</div>
+			{:else if hasExistingData()}
+				<div class="space-y-4 max-h-[60vh] overflow-y-auto">
+					<p class="text-sm text-surface-400 mb-4">Showing existing data for prefix <code class="bg-surface-700 px-1 rounded">{data.defaults.bankIdPrefix}</code></p>
+
+					<!-- Existing Banks -->
+					{#if data.existing.banks.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center gap-2">
+									<Building class="size-4 text-secondary-500" />
+									<span class="font-medium">Banks: {data.existing.banks.length}</span>
+								</div>
+								<button
+									type="button"
+									onclick={() => copyToClipboard('existingBanks', formatExistingBanks())}
+									class="btn btn-sm preset-tonal flex items-center gap-1"
+									title="Copy banks"
+								>
+									{#if copiedSection === 'existingBanks'}
+										<Check class="size-3" />
+									{:else}
+										<Copy class="size-3" />
+									{/if}
+								</button>
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1">
+								{#each data.existing.banks as bank}
+									<li class="flex items-center gap-1">
+										<a
+											href={getBankUrl(bank)}
+											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+										>
+											<code class="text-xs bg-surface-700 px-1 rounded">{bank.bank_id}</code>
+											<ExternalLink class="size-3" />
+										</a>
+										<span class="text-surface-500 mx-1">|</span>
+										<span class="text-surface-300">{bank.full_name}</span>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					<!-- Existing Accounts -->
+					{#if data.existing.accounts.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center gap-2">
+									<Wallet class="size-4 text-secondary-500" />
+									<span class="font-medium">Accounts: {data.existing.accounts.length}</span>
+								</div>
+								<button
+									type="button"
+									onclick={() => copyToClipboard('existingAccounts', formatExistingAccounts())}
+									class="btn btn-sm preset-tonal flex items-center gap-1"
+									title="Copy accounts"
+								>
+									{#if copiedSection === 'existingAccounts'}
+										<Check class="size-3" />
+									{:else}
+										<Copy class="size-3" />
+									{/if}
+								</button>
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
+								{#each data.existing.accounts as account}
+									<li class="flex items-center gap-1">
+										<a
+											href={getAccountUrl(account)}
+											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+										>
+											<code class="text-xs bg-surface-700 px-1 rounded">{account.account_id}</code>
+											<ExternalLink class="size-3" />
+										</a>
+										<span class="text-surface-500 mx-1">|</span>
+										<span class="text-surface-300">{account.label}</span>
+										{#if account.currency}
+											<span class="text-surface-500 mx-1">|</span>
+											<span class="text-tertiary-400">{account.currency}</span>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					<!-- Existing Counterparties -->
+					{#if data.existing.counterparties.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center gap-2">
+									<Users class="size-4 text-secondary-500" />
+									<span class="font-medium">Counterparties: {data.existing.counterparties.length}</span>
+								</div>
+								<button
+									type="button"
+									onclick={() => copyToClipboard('existingCounterparties', formatExistingCounterparties())}
+									class="btn btn-sm preset-tonal flex items-center gap-1"
+									title="Copy counterparties"
+								>
+									{#if copiedSection === 'existingCounterparties'}
+										<Check class="size-3" />
+									{:else}
+										<Copy class="size-3" />
+									{/if}
+								</button>
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
+								{#each data.existing.counterparties as cp}
+									<li class="flex items-center gap-1">
+										<a
+											href={getCounterpartyUrl(cp)}
+											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+										>
+											<span>{cp.name}</span>
+											<ExternalLink class="size-3" />
+										</a>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					<!-- Existing FX Rates -->
+					{#if data.existing.fxRates.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center gap-2">
+									<TrendingUp class="size-4 text-secondary-500" />
+									<span class="font-medium">FX Rates: {data.existing.fxRates.length}</span>
+								</div>
+								<button
+									type="button"
+									onclick={() => copyToClipboard('existingFxRates', formatExistingFxRates())}
+									class="btn btn-sm preset-tonal flex items-center gap-1"
+									title="Copy FX rates"
+								>
+									{#if copiedSection === 'existingFxRates'}
+										<Check class="size-3" />
+									{:else}
+										<Copy class="size-3" />
+									{/if}
+								</button>
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
+								{#each data.existing.fxRates.slice(0, 10) as fx}
+									<li>{fx.from_currency} → {fx.to_currency}: <code class="text-xs bg-surface-700 px-1 rounded">{fx.rate}</code></li>
+								{/each}
+								{#if data.existing.fxRates.length > 10}
+									<li class="text-surface-500">...and {data.existing.fxRates.length - 10} more</li>
+								{/if}
+							</ul>
+						</div>
+					{/if}
+
+					<!-- Existing Transactions -->
+					{#if data.existing.transactions.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center gap-2">
+									<History class="size-4 text-secondary-500" />
+									<span class="font-medium">Transactions: {data.existing.transactions.length}</span>
+								</div>
+								<button
+									type="button"
+									onclick={() => copyToClipboard('existingTransactions', formatExistingTransactions())}
+									class="btn btn-sm preset-tonal flex items-center gap-1"
+									title="Copy transactions"
+								>
+									{#if copiedSection === 'existingTransactions'}
+										<Check class="size-3" />
+									{:else}
+										<Copy class="size-3" />
+									{/if}
+								</button>
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
+								{#each data.existing.transactions as txn}
+									<li class="flex items-center gap-1">
+										<a
+											href={getTransactionUrl(txn)}
+											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+										>
+											<code class="text-xs bg-surface-700 px-1 rounded">{txn.transaction_id}</code>
+											<ExternalLink class="size-3" />
+										</a>
+										<span class="text-surface-500 mx-1">|</span>
+										<span class="text-tertiary-400">{txn.amount}</span>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+				</div>
 			{:else}
 				<div class="flex flex-col items-center justify-center py-12 text-surface-500">
 					<Database class="size-12 mb-4 opacity-50" />
-					<p>Configure options and click "Populate Sandbox"</p>
-					<p class="text-sm mt-2">Results will appear here</p>
+					<p>No existing data for prefix <code class="bg-surface-700 px-1 rounded">{data.defaults.bankIdPrefix}</code></p>
+					<p class="text-sm mt-2">Configure options and click "Populate Sandbox"</p>
 				</div>
 			{/if}
 		</div>

@@ -23,9 +23,118 @@ const FX_RATES: Record<string, number> = {
 	CNY: 0.53 // 1 BWP = 0.53 CNY
 };
 
+// Target currencies for FX rates
+const TARGET_CURRENCIES = Object.keys(FX_RATES);
+const BASE_CURRENCY = 'BWP';
+
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.session?.data?.user;
+	const accessToken = locals.session?.data?.oauth?.access_token;
 	const username = user?.username || 'unknown';
+	const bankIdPrefix = getUsernamePrefix(username);
+
+	// Initialize existing data structure
+	const existing = {
+		banks: [] as Array<{ bank_id: string; bank_code: string; full_name: string }>,
+		accounts: [] as Array<{ account_id: string; bank_id: string; label: string; currency: string }>,
+		counterparties: [] as Array<{ counterparty_id: string; name: string; bank_id: string; account_id: string }>,
+		fxRates: [] as Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number }>,
+		transactions: [] as Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string }>
+	};
+
+	if (accessToken) {
+		const client = new OBPClient(env.PUBLIC_OBP_BASE_URL, 'v6.0.0', accessToken);
+
+		try {
+			// Find banks matching user's prefix pattern
+			const banksResponse = await client.getBanks();
+			const userBanks = banksResponse.banks.filter(b => b.bank_id.startsWith(bankIdPrefix + '.'));
+
+			for (const bank of userBanks) {
+				existing.banks.push({
+					bank_id: bank.bank_id,
+					bank_code: bank.short_name || '',
+					full_name: bank.full_name
+				});
+
+				// Get accounts for this bank
+				try {
+					const accountsResponse = await client.getAccountsAtBank(bank.bank_id);
+					const accounts = accountsResponse.accounts || [];
+					for (const account of accounts) {
+						const accountId = (account as any).account_id || (account as any).id || '';
+						existing.accounts.push({
+							account_id: accountId,
+							bank_id: bank.bank_id,
+							label: (account as any).label || '',
+							currency: (account as any).currency || ''
+						});
+					}
+				} catch (e) {
+					logger.warn(`Could not fetch accounts for ${bank.bank_id}`);
+				}
+
+				// Get FX rates for this bank
+				for (const targetCurrency of TARGET_CURRENCIES) {
+					const forwardRate = await client.getFxRate(bank.bank_id, BASE_CURRENCY, targetCurrency);
+					if (forwardRate) {
+						existing.fxRates.push({
+							bank_id: bank.bank_id,
+							from_currency: BASE_CURRENCY,
+							to_currency: targetCurrency,
+							rate: forwardRate.conversion_value
+						});
+					}
+					const reverseRate = await client.getFxRate(bank.bank_id, targetCurrency, BASE_CURRENCY);
+					if (reverseRate) {
+						existing.fxRates.push({
+							bank_id: bank.bank_id,
+							from_currency: targetCurrency,
+							to_currency: BASE_CURRENCY,
+							rate: reverseRate.conversion_value
+						});
+					}
+				}
+			}
+
+			// Get counterparties for first account
+			if (existing.accounts.length > 0) {
+				const firstAccount = existing.accounts[0];
+				try {
+					const cpResponse = await client.getCounterparties(firstAccount.bank_id, firstAccount.account_id);
+					for (const cp of cpResponse.counterparties || []) {
+						existing.counterparties.push({
+							counterparty_id: cp.counterparty_id,
+							name: cp.name,
+							bank_id: firstAccount.bank_id,
+							account_id: firstAccount.account_id
+						});
+					}
+				} catch (e) {
+					logger.warn(`Could not fetch counterparties`);
+				}
+
+				// Get transactions for first account
+				try {
+					const transactions = await client.getTransactionsForAccount(firstAccount.bank_id, firstAccount.account_id);
+					for (const txn of transactions.slice(0, 20)) { // Limit to 20
+						existing.transactions.push({
+							transaction_id: txn.transaction_id,
+							bank_id: firstAccount.bank_id,
+							from_account_id: firstAccount.account_id,
+							to_account_id: txn.other_account?.id || '',
+							amount: `${txn.details?.value?.amount || '0'} ${txn.details?.value?.currency || ''}`
+						});
+					}
+				} catch (e) {
+					logger.warn(`Could not fetch transactions`);
+				}
+			}
+		} catch (e) {
+			logger.error('Failed to load existing data:', e);
+		}
+	}
+
 	return {
 		username,
 		obpBaseUrl: env.PUBLIC_OBP_BASE_URL,
@@ -34,8 +143,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			numAccountsPerBank: 5,
 			country: 'Botswana',
 			currency: 'BWP',
-			bankIdPrefix: getUsernamePrefix(username)
-		}
+			bankIdPrefix
+		},
+		existing
 	};
 };
 
