@@ -13,7 +13,9 @@
 		History,
 		Copy,
 		Check,
-		ExternalLink
+		ExternalLink,
+		Plus,
+		RotateCcw
 	} from '@lucide/svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -22,6 +24,7 @@
 	let numBanks = $state(data.defaults.numBanks);
 	let numAccountsPerBank = $state(data.defaults.numAccountsPerBank);
 	let currency = $state(data.defaults.currency);
+	let bankIdPrefix = $state(data.defaults.bankIdPrefix);
 	let createCounterparties = $state(true);
 	let createFxRates = $state(true);
 	let createTransactions = $state(true);
@@ -71,6 +74,10 @@
 		return `/transaction/${txn.bank_id}/${txn.from_account_id}/${txn.transaction_id}`;
 	}
 
+	function getBankUrl(bank: { bank_id: string }) {
+		return `/banks/${bank.bank_id}`;
+	}
+
 	function getAccountUrl(account: { account_id: string; bank_id: string }) {
 		return `/account/${account.bank_id}/${account.account_id}`;
 	}
@@ -108,6 +115,20 @@
 				}}
 				class="space-y-4"
 			>
+				<!-- Bank ID Prefix -->
+				<div>
+					<label for="bankIdPrefix" class="block text-sm font-medium mb-1">Bank ID Prefix</label>
+					<input
+						type="text"
+						id="bankIdPrefix"
+						name="bankIdPrefix"
+						bind:value={bankIdPrefix}
+						class="input w-full"
+						disabled={isLoading}
+					/>
+					<p class="text-xs text-surface-500 mt-1">Banks will be: <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.1</code>, <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.2</code>, ...</p>
+				</div>
+
 				<!-- Number of Banks -->
 				<div>
 					<label for="numBanks" class="block text-sm font-medium mb-1">Number of Banks</label>
@@ -121,7 +142,6 @@
 						class="input w-full"
 						disabled={isLoading}
 					/>
-					<p class="text-xs text-surface-500 mt-1">Banks will be named: {data.username}.bank1.bw</p>
 				</div>
 
 				<!-- Accounts per Bank -->
@@ -277,7 +297,13 @@
 						<div class="flex items-center justify-between mb-2">
 							<div class="flex items-center gap-2">
 								<Building class="size-4 text-secondary-500" />
-								<span class="font-medium">Banks Created: {form.results.banks.length}</span>
+								<span class="font-medium">Banks: {form.results.banks.length}</span>
+								{#if form.results.banks.filter(b => !b.existed).length > 0}
+									<span class="text-xs text-success-400">{form.results.banks.filter(b => !b.existed).length} new</span>
+								{/if}
+								{#if form.results.banks.filter(b => b.existed).length > 0}
+									<span class="text-xs text-warning-400">{form.results.banks.filter(b => b.existed).length} existing</span>
+								{/if}
 							</div>
 							{#if form.results.banks.length > 0}
 								<button
@@ -297,8 +323,19 @@
 						{#if form.results.banks.length > 0}
 							<ul class="text-sm text-surface-400 ml-6 space-y-1">
 								{#each form.results.banks as bank}
-									<li>
-										<code class="text-xs bg-surface-700 px-1 rounded">{bank.bank_id}</code>
+									<li class="flex items-center gap-1">
+										{#if bank.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
+										<a
+											href={getBankUrl(bank)}
+											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+										>
+											<code class="text-xs bg-surface-700 px-1 rounded">{bank.bank_id}</code>
+											<ExternalLink class="size-3" />
+										</a>
 										<span class="text-surface-500 mx-1">|</span>
 										<span class="text-surface-300">{bank.bank_code}</span>
 									</li>
@@ -312,7 +349,13 @@
 						<div class="flex items-center justify-between mb-2">
 							<div class="flex items-center gap-2">
 								<Wallet class="size-4 text-secondary-500" />
-								<span class="font-medium">Accounts Created: {form.results.accounts.length}</span>
+								<span class="font-medium">Accounts: {form.results.accounts.length}</span>
+								{#if form.results.accounts.filter(a => !a.existed).length > 0}
+									<span class="text-xs text-success-400">{form.results.accounts.filter(a => !a.existed).length} new</span>
+								{/if}
+								{#if form.results.accounts.filter(a => a.existed).length > 0}
+									<span class="text-xs text-warning-400">{form.results.accounts.filter(a => a.existed).length} existing</span>
+								{/if}
 							</div>
 							{#if form.results.accounts.length > 0}
 								<button
@@ -333,6 +376,11 @@
 							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
 								{#each form.results.accounts as account}
 									<li class="flex items-center gap-1">
+										{#if account.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
 										<a
 											href={getAccountUrl(account)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
@@ -356,6 +404,12 @@
 							<div class="flex items-center gap-2">
 								<Users class="size-4 text-secondary-500" />
 								<span class="font-medium">Counterparties: {form.results.counterparties.length}</span>
+								{#if form.results.counterparties.filter(cp => !cp.existed).length > 0}
+									<span class="text-xs text-success-400">{form.results.counterparties.filter(cp => !cp.existed).length} new</span>
+								{/if}
+								{#if form.results.counterparties.filter(cp => cp.existed).length > 0}
+									<span class="text-xs text-warning-400">{form.results.counterparties.filter(cp => cp.existed).length} existing</span>
+								{/if}
 							</div>
 							{#if form.results.counterparties.length > 0}
 								<button
@@ -376,6 +430,11 @@
 							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
 								{#each form.results.counterparties as cp}
 									<li class="flex items-center gap-1">
+										{#if cp.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
 										<a
 											href={getCounterpartyUrl(cp)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
@@ -395,6 +454,12 @@
 							<div class="flex items-center gap-2">
 								<TrendingUp class="size-4 text-secondary-500" />
 								<span class="font-medium">FX Rates: {form.results.fxRates.length}</span>
+								{#if form.results.fxRates.filter(fx => !fx.existed).length > 0}
+									<span class="text-xs text-success-400">{form.results.fxRates.filter(fx => !fx.existed).length} new</span>
+								{/if}
+								{#if form.results.fxRates.filter(fx => fx.existed).length > 0}
+									<span class="text-xs text-warning-400">{form.results.fxRates.filter(fx => fx.existed).length} existing</span>
+								{/if}
 							</div>
 							{#if form.results.fxRates.length > 0}
 								<button
@@ -414,7 +479,15 @@
 						{#if form.results.fxRates.length > 0}
 							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
 								{#each form.results.fxRates.slice(0, 10) as fx}
-									<li>{fx.from_currency} → {fx.to_currency}: <code class="text-xs bg-surface-700 px-1 rounded">{fx.rate}</code></li>
+									<li class="flex items-center gap-1">
+										{#if fx.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
+										<span>{fx.from_currency} → {fx.to_currency}:</span>
+										<code class="text-xs bg-surface-700 px-1 rounded">{fx.rate}</code>
+									</li>
 								{/each}
 								{#if form.results.fxRates.length > 10}
 									<li class="text-surface-500">...and {form.results.fxRates.length - 10} more</li>
@@ -429,6 +502,12 @@
 							<div class="flex items-center gap-2">
 								<History class="size-4 text-secondary-500" />
 								<span class="font-medium">Transactions: {form.results.transactions.length}</span>
+								{#if form.results.transactions.filter(t => !t.existed).length > 0}
+									<span class="text-xs text-success-400">{form.results.transactions.filter(t => !t.existed).length} new</span>
+								{/if}
+								{#if form.results.transactions.filter(t => t.existed).length > 0}
+									<span class="text-xs text-warning-400">{form.results.transactions.filter(t => t.existed).length} existing</span>
+								{/if}
 							</div>
 							{#if form.results.transactions.length > 0}
 								<button
@@ -449,6 +528,11 @@
 							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
 								{#each form.results.transactions as txn}
 									<li class="flex items-center gap-1">
+										{#if txn.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
 										<a
 											href={getTransactionUrl(txn)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"

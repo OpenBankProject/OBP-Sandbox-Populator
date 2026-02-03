@@ -25,14 +25,16 @@ const FX_RATES: Record<string, number> = {
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.session?.data?.user;
+	const username = user?.username || 'unknown';
 	return {
-		username: user?.username || 'unknown',
+		username,
 		obpBaseUrl: env.PUBLIC_OBP_BASE_URL,
 		defaults: {
 			numBanks: 2,
 			numAccountsPerBank: 5,
 			country: 'Botswana',
-			currency: 'BWP'
+			currency: 'BWP',
+			bankIdPrefix: getUsernamePrefix(username)
 		}
 	};
 };
@@ -65,6 +67,7 @@ export const actions: Actions = {
 		const numBanks = parseInt(formData.get('numBanks') as string) || 2;
 		const numAccountsPerBank = parseInt(formData.get('numAccountsPerBank') as string) || 5;
 		const currency = (formData.get('currency') as string) || 'BWP';
+		const bankIdPrefix = (formData.get('bankIdPrefix') as string) || getUsernamePrefix(user.username);
 		const createCounterparties = formData.get('createCounterparties') === 'on';
 		const createFxRates = formData.get('createFxRates') === 'on';
 		const createTransactions = formData.get('createTransactions') === 'on';
@@ -76,11 +79,11 @@ export const actions: Actions = {
 		);
 
 		const results: {
-			banks: Array<{ bank_id: string; bank_code: string; full_name: string }>;
-			accounts: Array<{ account_id: string; bank_id: string; label: string; currency: string }>;
-			counterparties: Array<{ counterparty_id: string; name: string; bank_id: string; account_id: string }>;
-			fxRates: Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number }>;
-			transactions: Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string }>;
+			banks: Array<{ bank_id: string; bank_code: string; full_name: string; existed: boolean }>;
+			accounts: Array<{ account_id: string; bank_id: string; label: string; currency: string; existed: boolean }>;
+			counterparties: Array<{ counterparty_id: string; name: string; bank_id: string; account_id: string; existed: boolean }>;
+			fxRates: Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number; existed: boolean }>;
+			transactions: Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string; existed: boolean }>;
 			errors: string[];
 		} = {
 			banks: [],
@@ -91,13 +94,11 @@ export const actions: Actions = {
 			errors: []
 		};
 
-		const usernamePrefix = getUsernamePrefix(user.username);
-
 		try {
 			// Create Banks
 			logger.info(`Creating ${numBanks} banks...`);
 			for (let i = 1; i <= numBanks; i++) {
-				const bankId = `${usernamePrefix}.bnk.${i}`;
+				const bankId = `${bankIdPrefix}.bnk.${i}`;
 				const bankName = `${user.username} Test Bank ${i}`;
 
 				const bank_code = `TB${i}BW`;
@@ -106,7 +107,7 @@ export const actions: Actions = {
 					const exists = await client.bankExists(bankId);
 					if (exists) {
 						logger.info(`Bank ${bankId} already exists, skipping`);
-						results.banks.push({ bank_id: bankId, bank_code, full_name: bankName });
+						results.banks.push({ bank_id: bankId, bank_code, full_name: bankName, existed: true });
 					} else {
 						const bank = await client.createBank({
 							bank_id: bankId,
@@ -118,7 +119,8 @@ export const actions: Actions = {
 						results.banks.push({
 							bank_id: bank.bank_id,
 							bank_code: bank.bank_code,
-							full_name: bank.full_name
+							full_name: bank.full_name,
+							existed: false
 						});
 						logger.info(`Created bank: ${bank.bank_id}`);
 					}
@@ -134,23 +136,54 @@ export const actions: Actions = {
 			// Create Accounts for each bank
 			logger.info(`Creating ${numAccountsPerBank} accounts per bank...`);
 			for (const bank of results.banks) {
+				// Get existing accounts for this bank
+				// Note: API returns 'id' not 'account_id' for the list endpoint
+				let existingAccounts: Array<{ id?: string; account_id?: string; label?: string; currency?: string }> = [];
+				try {
+					const accountsResponse = await client.getAccountsAtBank(bank.bank_id);
+					// Handle both array and object with accounts property
+					if (Array.isArray(accountsResponse)) {
+						existingAccounts = accountsResponse;
+					} else if (accountsResponse && accountsResponse.accounts) {
+						existingAccounts = accountsResponse.accounts;
+					}
+					logger.debug(`Found ${existingAccounts.length} existing accounts at ${bank.bank_id}`);
+				} catch (e: any) {
+					logger.warn(`Could not fetch existing accounts for ${bank.bank_id}: ${e.message}`);
+				}
+
 				for (let j = 1; j <= numAccountsPerBank; j++) {
 					const label = `Account ${j}`;
 					try {
-						const account = await client.createAccount(bank.bank_id, {
-							label: label,
-							currency: currency,
-							balance: { amount: '0', currency: currency },
-							user_id: user.user_id
-						});
-						logger.debug('Account creation response:', JSON.stringify(account));
-						results.accounts.push({
-							account_id: account.account_id,
-							bank_id: bank.bank_id,
-							label: account.label,
-							currency: account.currency
-						});
-						logger.info(`Created account: ${account.account_id} at ${bank.bank_id}`);
+						// Check if account with this label already exists
+						const existingAccount = existingAccounts.find(a => a.label && a.label === label);
+						if (existingAccount) {
+							const accountId = existingAccount.account_id || existingAccount.id || '';
+							logger.info(`Account "${label}" already exists at ${bank.bank_id}, skipping`);
+							results.accounts.push({
+								account_id: accountId,
+								bank_id: bank.bank_id,
+								label: existingAccount.label || label,
+								currency: existingAccount.currency || currency,
+								existed: true
+							});
+						} else {
+							const account = await client.createAccount(bank.bank_id, {
+								label: label,
+								currency: currency,
+								balance: { amount: '0', currency: currency },
+								user_id: user.user_id
+							});
+							logger.debug('Account creation response:', JSON.stringify(account));
+							results.accounts.push({
+								account_id: account.account_id,
+								bank_id: bank.bank_id,
+								label: account.label,
+								currency: account.currency,
+								existed: false
+							});
+							logger.info(`Created account: ${account.account_id} at ${bank.bank_id}`);
+						}
 					} catch (e: any) {
 						const errorMsg = `Failed to create account at ${bank.bank_id}: ${e.message}`;
 						logger.error(errorMsg);
@@ -166,17 +199,41 @@ export const actions: Actions = {
 				const businesses = getBusinesses(10); // Get first 10 businesses
 				const firstAccount = results.accounts[0];
 
+				// Get existing counterparties for this account
+				let existingCounterparties: Array<{ counterparty_id?: string; name?: string }> = [];
+				try {
+					const cpResponse = await client.getCounterparties(firstAccount.bank_id, firstAccount.account_id);
+					existingCounterparties = cpResponse.counterparties || [];
+					logger.debug(`Found ${existingCounterparties.length} existing counterparties`);
+				} catch (e: any) {
+					logger.warn(`Could not fetch existing counterparties: ${e.message}`);
+				}
+
 				for (const business of businesses) {
 					try {
-						const payload = getBusinessForCounterparty(business, currency);
-						const counterparty = await client.createCounterparty(firstAccount.bank_id, firstAccount.account_id, payload);
-						results.counterparties.push({
-							counterparty_id: counterparty.counterparty_id,
-							name: business.name,
-							bank_id: firstAccount.bank_id,
-							account_id: firstAccount.account_id
-						});
-						logger.info(`Created counterparty: ${business.name}`);
+						// Check if counterparty with this name already exists
+						const existingCp = existingCounterparties.find(cp => cp.name === business.name);
+						if (existingCp && existingCp.counterparty_id) {
+							logger.info(`Counterparty "${business.name}" already exists, skipping`);
+							results.counterparties.push({
+								counterparty_id: existingCp.counterparty_id,
+								name: business.name,
+								bank_id: firstAccount.bank_id,
+								account_id: firstAccount.account_id,
+								existed: true
+							});
+						} else {
+							const payload = getBusinessForCounterparty(business, currency);
+							const counterparty = await client.createCounterparty(firstAccount.bank_id, firstAccount.account_id, payload);
+							results.counterparties.push({
+								counterparty_id: counterparty.counterparty_id,
+								name: business.name,
+								bank_id: firstAccount.bank_id,
+								account_id: firstAccount.account_id,
+								existed: false
+							});
+							logger.info(`Created counterparty: ${business.name}`);
+						}
 					} catch (e: any) {
 						const errorMsg = `Failed to create counterparty ${business.name}: ${e.message}`;
 						logger.error(errorMsg);
@@ -193,31 +250,60 @@ export const actions: Actions = {
 					for (const [targetCurrency, rate] of Object.entries(FX_RATES)) {
 						try {
 							const effectiveDate = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-							await client.createFxRate(bank.bank_id, {
-								from_currency_code: currency,
-								to_currency_code: targetCurrency,
-								conversion_value: rate,
-								effective_date: effectiveDate
-							});
-							results.fxRates.push({
-								bank_id: bank.bank_id,
-								from_currency: currency,
-								to_currency: targetCurrency,
-								rate: rate
-							});
-							// Also create reverse rate
-							await client.createFxRate(bank.bank_id, {
-								from_currency_code: targetCurrency,
-								to_currency_code: currency,
-								conversion_value: 1 / rate,
-								effective_date: effectiveDate
-							});
-							results.fxRates.push({
-								bank_id: bank.bank_id,
-								from_currency: targetCurrency,
-								to_currency: currency,
-								rate: parseFloat((1 / rate).toFixed(6))
-							});
+
+							// Check if forward rate exists
+							const existingForwardRate = await client.getFxRate(bank.bank_id, currency, targetCurrency);
+							if (existingForwardRate) {
+								logger.info(`FX rate ${currency}→${targetCurrency} already exists at ${bank.bank_id}, skipping`);
+								results.fxRates.push({
+									bank_id: bank.bank_id,
+									from_currency: currency,
+									to_currency: targetCurrency,
+									rate: existingForwardRate.conversion_value,
+									existed: true
+								});
+							} else {
+								await client.createFxRate(bank.bank_id, {
+									from_currency_code: currency,
+									to_currency_code: targetCurrency,
+									conversion_value: rate,
+									effective_date: effectiveDate
+								});
+								results.fxRates.push({
+									bank_id: bank.bank_id,
+									from_currency: currency,
+									to_currency: targetCurrency,
+									rate: rate,
+									existed: false
+								});
+							}
+
+							// Check if reverse rate exists
+							const existingReverseRate = await client.getFxRate(bank.bank_id, targetCurrency, currency);
+							if (existingReverseRate) {
+								logger.info(`FX rate ${targetCurrency}→${currency} already exists at ${bank.bank_id}, skipping`);
+								results.fxRates.push({
+									bank_id: bank.bank_id,
+									from_currency: targetCurrency,
+									to_currency: currency,
+									rate: existingReverseRate.conversion_value,
+									existed: true
+								});
+							} else {
+								await client.createFxRate(bank.bank_id, {
+									from_currency_code: targetCurrency,
+									to_currency_code: currency,
+									conversion_value: 1 / rate,
+									effective_date: effectiveDate
+								});
+								results.fxRates.push({
+									bank_id: bank.bank_id,
+									from_currency: targetCurrency,
+									to_currency: currency,
+									rate: parseFloat((1 / rate).toFixed(6)),
+									existed: false
+								});
+							}
 						} catch (e: any) {
 							const errorMsg = `FX rate ${currency}→${targetCurrency} at ${bank.bank_id}: ${e.message}`;
 							logger.error(errorMsg);
@@ -247,11 +333,38 @@ export const actions: Actions = {
 				for (const [bank_id, account_ids] of Object.entries(bankAccounts)) {
 					if (account_ids.length < 2) continue;
 
+					// Get existing transactions for the first account to check for duplicates
+					let existingTransactions: Array<{ transaction_id: string; details?: { description?: string; value?: { amount?: string; currency?: string } } }> = [];
+					try {
+						existingTransactions = await client.getTransactionsForAccount(bank_id, account_ids[0]);
+						logger.debug(`Found ${existingTransactions.length} existing transactions for account ${account_ids[0]}`);
+					} catch (e: any) {
+						logger.warn(`Could not fetch existing transactions: ${e.message}`);
+					}
+
 					// Create some transactions over the last 12 months
 					for (let month = 0; month < 12; month++) {
 						const date = new Date(now);
 						date.setMonth(date.getMonth() - month);
 						const dateStr = date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+						const description = `Monthly transfer ${month + 1}`;
+
+						// Check if a transaction with this description already exists
+						const existingTxn = existingTransactions.find(t => t.details?.description === description);
+						if (existingTxn) {
+							logger.info(`Transaction "${description}" already exists at ${bank_id}, skipping`);
+							const amount = existingTxn.details?.value?.amount || '0';
+							const txnCurrency = existingTxn.details?.value?.currency || currency;
+							results.transactions.push({
+								transaction_id: existingTxn.transaction_id,
+								bank_id: bank_id,
+								from_account_id: account_ids[0],
+								to_account_id: account_ids[1] || account_ids[0],
+								amount: `${amount} ${txnCurrency}`,
+								existed: true
+							});
+							continue;
+						}
 
 						// Random transaction between accounts
 						const fromIdx = Math.floor(Math.random() * account_ids.length);
@@ -269,7 +382,7 @@ export const actions: Actions = {
 									currency: currency,
 									amount: amount
 								},
-								description: `Monthly transfer ${month + 1}`,
+								description: description,
 								posted: dateStr,
 								completed: dateStr
 							});
@@ -279,7 +392,8 @@ export const actions: Actions = {
 								bank_id: bank_id,
 								from_account_id: account_ids[fromIdx],
 								to_account_id: account_ids[toIdx],
-								amount: `${amount} ${currency}`
+								amount: `${amount} ${currency}`,
+								existed: false
 							});
 						} catch (e: any) {
 							const errorMsg = `Transaction at ${bank_id}: ${e.message}`;
