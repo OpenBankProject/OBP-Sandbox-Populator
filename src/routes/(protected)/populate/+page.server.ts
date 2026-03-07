@@ -87,7 +87,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			for (const bank of userBanks) {
 				existing.banks.push({
 					bank_id: bank.bank_id,
-					bank_code: bank.short_name || '',
+					bank_code: bank.bank_code,
 					full_name: bank.full_name
 				});
 
@@ -313,7 +313,7 @@ export const actions: Actions = {
 				const bankId = `${bankIdPrefix}.bnk.${i}`;
 				const bankName = `${user.username} Test Bank ${i}`;
 
-				const bank_code = `TB${i}BW`;
+				const bank_code = `${bankIdPrefix}${i}${countryCode}`;
 				try {
 					// Check if bank exists
 					const exists = await client.bankExists(bankId);
@@ -324,7 +324,6 @@ export const actions: Actions = {
 						const bank = await client.createBank({
 							bank_id: bankId,
 							full_name: bankName,
-							short_name: `TB${i}`,
 							bank_code: bank_code
 						});
 						logger.debug('Bank creation response:', JSON.stringify(bank));

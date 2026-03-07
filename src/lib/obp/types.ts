@@ -1,8 +1,8 @@
 // Bank Types
 export interface Bank {
 	bank_id: string;
+	bank_code: string;
 	full_name: string;
-	short_name: string;
 	logo: string | null;
 	website: string | null;
 	bank_routings: BankRouting[];
@@ -21,8 +21,7 @@ export interface BanksResponse {
 export interface CreateBankPayload {
 	bank_id: string;
 	full_name: string;
-	short_name: string;
-	bank_code?: string;
+	bank_code: string;
 	logo?: string;
 	website?: string;
 	bank_routings?: BankRouting[];

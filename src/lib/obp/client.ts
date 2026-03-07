@@ -114,8 +114,7 @@ export class OBPClient {
 		const body = {
 			bank_id: payload.bank_id,
 			full_name: payload.full_name,
-			short_name: payload.short_name,
-			bank_code: payload.bank_code || payload.short_name,
+			bank_code: payload.bank_code,
 			logo: payload.logo || '',
 			website: payload.website || '',
 			bank_routings: payload.bank_routings || []
