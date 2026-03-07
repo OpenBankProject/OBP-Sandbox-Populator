@@ -4,7 +4,16 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { OBPClient } from '$lib/obp/client';
 import { env } from '$env/dynamic/public';
-import { getBusinesses, getBusinessForCounterparty } from '$lib/data/botswana-businesses';
+import {
+	COUNTRY_LIST,
+	getCountryConfig,
+	getBusinesses,
+	getBusinessForCounterparty,
+	getIndividualCustomers,
+	getCorporateCustomers,
+	toCreateCustomerPayload,
+	toCreateCorporateCustomerPayload
+} from '$lib/data/countries';
 
 // FX rates for African currencies and others (relative to BWP)
 const FX_RATES: Record<string, number> = {
@@ -20,7 +29,9 @@ const FX_RATES: Record<string, number> = {
 	UGX: 275, // 1 BWP = 275 UGX
 	ZMW: 1.88, // 1 BWP = 1.88 ZMW
 	NAD: 1.37, // 1 BWP = 1.37 NAD
-	CNY: 0.53 // 1 BWP = 0.53 CNY
+	CNY: 0.53, // 1 BWP = 0.53 CNY
+	JPY: 11.2, // 1 BWP = 11.2 JPY
+	SGD: 0.099 // 1 BWP = 0.099 SGD
 };
 
 // Target currencies for FX rates
@@ -31,13 +42,36 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.session?.data?.user;
 	const accessToken = locals.session?.data?.oauth?.access_token;
 	const username = user?.username || 'unknown';
-	const bankIdPrefix = getUsernamePrefix(username);
+	const defaultPrefix = getUsernamePrefix(username);
+
+	// Try to load saved prefix from OBP Personal Data Field, then session, then derive from username
+	let bankIdPrefix = defaultPrefix;
+	if (accessToken) {
+		const client = new OBPClient(env.PUBLIC_OBP_BASE_URL, 'v6.0.0', accessToken);
+		try {
+			const fields = await client.getPersonalDataFields();
+			const saved = (fields.user_attributes || []).find(
+				(f) => f.name === 'sandbox_populator_last_bank_id_prefix'
+			);
+			if (saved?.value) {
+				bankIdPrefix = saved.value;
+			}
+		} catch (e) {
+			logger.warn('Could not load personal data fields');
+		}
+	}
+	// Fall back to session if OBP didn't have it
+	if (bankIdPrefix === defaultPrefix) {
+		const sessionPrefix = locals.session?.data?.sandbox_populator_last_bank_id_prefix;
+		if (sessionPrefix) bankIdPrefix = sessionPrefix;
+	}
 
 	// Initialize existing data structure
 	const existing = {
 		banks: [] as Array<{ bank_id: string; bank_code: string; full_name: string }>,
 		accounts: [] as Array<{ account_id: string; bank_id: string; label: string; currency: string }>,
 		counterparties: [] as Array<{ counterparty_id: string; name: string; bank_id: string; account_id: string }>,
+		customers: [] as Array<{ customer_id: string; legal_name: string; customer_type: string; bank_id: string }>,
 		fxRates: [] as Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number }>,
 		transactions: [] as Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string }>
 	};
@@ -113,6 +147,36 @@ export const load: PageServerLoad = async ({ locals }) => {
 					logger.warn(`Could not fetch counterparties`);
 				}
 
+				// Get individual customers for this bank
+				try {
+					const customersResponse = await client.getCustomersAtBank(firstAccount.bank_id);
+					for (const cust of customersResponse.customers || []) {
+						existing.customers.push({
+							customer_id: cust.customer_id,
+							legal_name: cust.legal_name,
+							customer_type: 'INDIVIDUAL',
+							bank_id: firstAccount.bank_id
+						});
+					}
+				} catch (e) {
+					logger.warn(`Could not fetch individual customers`);
+				}
+
+				// Get corporate customers for this bank
+				try {
+					const corpResponse = await client.getCorporateCustomersAtBank(firstAccount.bank_id);
+					for (const cust of corpResponse.customers || []) {
+						existing.customers.push({
+							customer_id: cust.customer_id,
+							legal_name: cust.legal_name,
+							customer_type: 'CORPORATE',
+							bank_id: firstAccount.bank_id
+						});
+					}
+				} catch (e) {
+					logger.warn(`Could not fetch corporate customers`);
+				}
+
 				// Get transactions for first account
 				try {
 					const transactions = await client.getTransactionsForAccount(firstAccount.bank_id, firstAccount.account_id);
@@ -137,10 +201,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		username,
 		obpBaseUrl: env.PUBLIC_OBP_BASE_URL,
+		countries: COUNTRY_LIST.map(c => ({ code: c.code, name: c.name, currency: c.currency })),
 		defaults: {
 			numBanks: 2,
 			numAccountsPerBank: 5,
-			country: 'Botswana',
+			countryCode: 'BW',
 			currency: 'BWP',
 			bankIdPrefix
 		},
@@ -176,10 +241,8 @@ export const actions: Actions = {
 		const numBanks = parseInt(formData.get('numBanks') as string) || 2;
 		const numAccountsPerBank = parseInt(formData.get('numAccountsPerBank') as string) || 5;
 		const currency = (formData.get('currency') as string) || 'BWP';
+		const countryCode = (formData.get('country') as string) || 'BW';
 		const bankIdPrefix = (formData.get('bankIdPrefix') as string) || getUsernamePrefix(user.username);
-		const createCounterparties = formData.get('createCounterparties') === 'on';
-		const createFxRates = formData.get('createFxRates') === 'on';
-		const createTransactions = formData.get('createTransactions') === 'on';
 
 		const client = new OBPClient(
 			env.PUBLIC_OBP_BASE_URL,
@@ -187,10 +250,49 @@ export const actions: Actions = {
 			accessToken
 		);
 
+		// Save the last used prefix to session and OBP Personal Data Field
+		try {
+			await session.setData({
+				...session.data,
+				sandbox_populator_last_bank_id_prefix: bankIdPrefix
+			});
+			await session.save();
+		} catch (e) {
+			logger.warn('Could not save bank ID prefix to session');
+		}
+		try {
+			const fields = await client.getPersonalDataFields();
+			const existing = (fields.user_attributes || []).find(
+				(f) => f.name === 'sandbox_populator_last_bank_id_prefix'
+			);
+			if (existing) {
+				await client.updatePersonalDataField(existing.user_attribute_id, {
+					name: 'sandbox_populator_last_bank_id_prefix',
+					type: 'STRING',
+					value: bankIdPrefix
+				});
+			} else {
+				await client.createPersonalDataField({
+					name: 'sandbox_populator_last_bank_id_prefix',
+					type: 'STRING',
+					value: bankIdPrefix
+				});
+			}
+			logger.info(`Saved bank ID prefix "${bankIdPrefix}" to personal data field`);
+		} catch (e) {
+			logger.warn('Could not save bank ID prefix to OBP personal data field');
+		}
+
+		const createCounterparties = formData.get('createCounterparties') === 'on';
+		const createCustomers = formData.get('createCustomers') === 'on';
+		const createFxRates = formData.get('createFxRates') === 'on';
+		const createTransactions = formData.get('createTransactions') === 'on';
+
 		const results: {
 			banks: Array<{ bank_id: string; bank_code: string; full_name: string; existed: boolean }>;
 			accounts: Array<{ account_id: string; bank_id: string; label: string; currency: string; existed: boolean }>;
 			counterparties: Array<{ counterparty_id: string; name: string; bank_id: string; account_id: string; existed: boolean }>;
+			customers: Array<{ customer_id: string; legal_name: string; customer_type: string; bank_id: string; existed: boolean }>;
 			fxRates: Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number; existed: boolean }>;
 			transactions: Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string; existed: boolean }>;
 			errors: string[];
@@ -198,6 +300,7 @@ export const actions: Actions = {
 			banks: [],
 			accounts: [],
 			counterparties: [],
+			customers: [],
 			fxRates: [],
 			transactions: [],
 			errors: []
@@ -225,6 +328,19 @@ export const actions: Actions = {
 							bank_code: bank_code
 						});
 						logger.debug('Bank creation response:', JSON.stringify(bank));
+
+						// Grant entitlements at new bank
+						for (const role of ['CanCreateAccount', 'CanCreateHistoricalTransactionAtBank', 'CanCreateCustomer', 'CanGetCustomersAtOneBank', 'CanCreateUserCustomerLink', 'CanGetUserCustomerLink']) {
+							try {
+								await client.createEntitlement(user.user_id, bank.bank_id, role);
+								logger.info(`Granted ${role} at ${bank.bank_id}`);
+							} catch (entErr: any) {
+								const errorMsg = `Could not grant ${role} at ${bank.bank_id}: ${entErr.message}`;
+							logger.warn(errorMsg);
+							results.errors.push(errorMsg);
+							}
+						}
+
 						results.banks.push({
 							bank_id: bank.bank_id,
 							bank_code: bank.bank_code,
@@ -298,7 +414,7 @@ export const actions: Actions = {
 			// Create Counterparties
 			if (createCounterparties && results.accounts.length > 0) {
 				logger.info('Creating counterparties...');
-				const businesses = getBusinesses(10); // Get first 10 businesses
+				const businesses = getBusinesses(countryCode, 10);
 				const firstAccount = results.accounts[0];
 
 				// Get existing counterparties for this account
@@ -343,6 +459,209 @@ export const actions: Actions = {
 					}
 					await delay(100);
 				}
+			}
+
+			// Create Customers (Individual and Corporate)
+			if (createCustomers && results.banks.length > 0) {
+				logger.info('Creating customers...');
+				const firstBank = results.banks[0];
+
+				// Get existing customers at this bank to check for duplicates
+				let existingCustomers: Array<{ customer_id: string; legal_name: string; customer_type?: string }> = [];
+				try {
+					const custResponse = await client.getCustomersAtBank(firstBank.bank_id);
+					existingCustomers = custResponse.customers || [];
+					logger.debug(`Found ${existingCustomers.length} existing customers at ${firstBank.bank_id}`);
+				} catch (e: any) {
+					logger.warn(`Could not fetch existing customers: ${e.message}`);
+				}
+
+				// Get existing user-customer links
+				let existingLinks: Array<{ customer_id: string }> = [];
+				try {
+					const linksResponse = await client.getUserCustomerLinksByUserId(firstBank.bank_id, user.user_id);
+					existingLinks = linksResponse.user_customer_links || [];
+				} catch (e: any) {
+					logger.warn(`Could not fetch user-customer links: ${e.message}`);
+				}
+
+				// --- Create "My" individual customer for the logged-in user ---
+				const myIndividualName = `${user.username} (Individual)`;
+				try {
+					const existingMy = existingCustomers.find(c => c.legal_name === myIndividualName);
+					if (existingMy) {
+						logger.info(`My individual customer already exists, skipping`);
+						results.customers.push({
+							customer_id: existingMy.customer_id,
+							legal_name: myIndividualName,
+							customer_type: 'INDIVIDUAL',
+							bank_id: firstBank.bank_id,
+							existed: true
+						});
+					} else {
+						const myCustomer = await client.createCustomer(firstBank.bank_id, {
+							legal_name: myIndividualName,
+							mobile_phone_number: '+267 70 000 0001',
+							email: user.email || `${user.username}@example.bw`,
+							kyc_status: true,
+							credit_limit: { currency, amount: '50000' },
+							credit_rating: { rating: 'A', source: 'OBP' },
+							last_ok_date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+						});
+						results.customers.push({
+							customer_id: myCustomer.customer_id,
+							legal_name: myCustomer.legal_name,
+							customer_type: 'INDIVIDUAL',
+							bank_id: firstBank.bank_id,
+							existed: false
+						});
+						logger.info(`Created my individual customer: ${myCustomer.legal_name}`);
+
+						// Create user-customer link
+						const alreadyLinked = existingLinks.some(l => l.customer_id === myCustomer.customer_id);
+						if (!alreadyLinked) {
+							try {
+								await client.createUserCustomerLink(firstBank.bank_id, {
+									user_id: user.user_id,
+									customer_id: myCustomer.customer_id
+								});
+								logger.info(`Linked user to individual customer ${myCustomer.customer_id}`);
+							} catch (linkErr: any) {
+								logger.warn(`Could not link user to individual customer: ${linkErr.message}`);
+								results.errors.push(`User-customer link (individual): ${linkErr.message}`);
+							}
+						}
+					}
+				} catch (e: any) {
+					const errorMsg = `Failed to create my individual customer: ${e.message}`;
+					logger.error(errorMsg);
+					results.errors.push(errorMsg);
+				}
+				await delay(100);
+
+				// --- Create "My" corporate customer for the logged-in user ---
+				const myCorporateName = `${user.username} Corp (Pty) Ltd`;
+				try {
+					const existingMyCorp = existingCustomers.find(c => c.legal_name === myCorporateName);
+					if (existingMyCorp) {
+						logger.info(`My corporate customer already exists, skipping`);
+						results.customers.push({
+							customer_id: existingMyCorp.customer_id,
+							legal_name: myCorporateName,
+							customer_type: 'CORPORATE',
+							bank_id: firstBank.bank_id,
+							existed: true
+						});
+					} else {
+						const myCorpCustomer = await client.createCorporateCustomer(firstBank.bank_id, {
+							legal_name: myCorporateName,
+							mobile_phone_number: '+267 31 000 0001',
+							email: `corp-${user.username}@example.bw`,
+							kyc_status: true,
+							credit_limit: { currency, amount: '1000000' },
+							credit_rating: { rating: 'AAA', source: 'OBP' },
+							last_ok_date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+						});
+						results.customers.push({
+							customer_id: myCorpCustomer.customer_id,
+							legal_name: myCorpCustomer.legal_name,
+							customer_type: 'CORPORATE',
+							bank_id: firstBank.bank_id,
+							existed: false
+						});
+						logger.info(`Created my corporate customer: ${myCorpCustomer.legal_name}`);
+
+						// Create user-customer link
+						const alreadyLinked = existingLinks.some(l => l.customer_id === myCorpCustomer.customer_id);
+						if (!alreadyLinked) {
+							try {
+								await client.createUserCustomerLink(firstBank.bank_id, {
+									user_id: user.user_id,
+									customer_id: myCorpCustomer.customer_id
+								});
+								logger.info(`Linked user to corporate customer ${myCorpCustomer.customer_id}`);
+							} catch (linkErr: any) {
+								logger.warn(`Could not link user to corporate customer: ${linkErr.message}`);
+								results.errors.push(`User-customer link (corporate): ${linkErr.message}`);
+							}
+						}
+					}
+				} catch (e: any) {
+					const errorMsg = `Failed to create my corporate customer: ${e.message}`;
+					logger.error(errorMsg);
+					results.errors.push(errorMsg);
+				}
+				await delay(100);
+
+				// --- Create general sample individual customers ---
+				const individualCustomers = getIndividualCustomers(countryCode, 5);
+				for (const custData of individualCustomers) {
+					try {
+						const existingCust = existingCustomers.find(c => c.legal_name === custData.legal_name);
+						if (existingCust) {
+							logger.info(`Customer "${custData.legal_name}" already exists, skipping`);
+							results.customers.push({
+								customer_id: existingCust.customer_id,
+								legal_name: custData.legal_name,
+								customer_type: existingCust.customer_type || 'INDIVIDUAL',
+								bank_id: firstBank.bank_id,
+								existed: true
+							});
+						} else {
+							const payload = toCreateCustomerPayload(custData, currency);
+							const customer = await client.createCustomer(firstBank.bank_id, payload);
+							results.customers.push({
+								customer_id: customer.customer_id,
+								legal_name: customer.legal_name,
+								customer_type: 'INDIVIDUAL',
+								bank_id: firstBank.bank_id,
+								existed: false
+							});
+							logger.info(`Created individual customer: ${customer.legal_name}`);
+						}
+					} catch (e: any) {
+						const errorMsg = `Failed to create customer ${custData.legal_name}: ${e.message}`;
+						logger.error(errorMsg);
+						results.errors.push(errorMsg);
+					}
+					await delay(100);
+				}
+
+				// --- Create general sample corporate customers ---
+				const corporateCustomers = getCorporateCustomers(countryCode, 5);
+				for (const corpData of corporateCustomers) {
+					try {
+						const existingCust = existingCustomers.find(c => c.legal_name === corpData.legal_name);
+						if (existingCust) {
+							logger.info(`Corporate customer "${corpData.legal_name}" already exists, skipping`);
+							results.customers.push({
+								customer_id: existingCust.customer_id,
+								legal_name: corpData.legal_name,
+								customer_type: existingCust.customer_type || 'CORPORATE',
+								bank_id: firstBank.bank_id,
+								existed: true
+							});
+						} else {
+							const payload = toCreateCorporateCustomerPayload(corpData, currency);
+							const customer = await client.createCorporateCustomer(firstBank.bank_id, payload);
+							results.customers.push({
+								customer_id: customer.customer_id,
+								legal_name: customer.legal_name,
+								customer_type: 'CORPORATE',
+								bank_id: firstBank.bank_id,
+								existed: false
+							});
+							logger.info(`Created corporate customer: ${customer.legal_name}`);
+						}
+					} catch (e: any) {
+						const errorMsg = `Failed to create corporate customer ${corpData.legal_name}: ${e.message}`;
+						logger.error(errorMsg);
+						results.errors.push(errorMsg);
+					}
+					await delay(100);
+				}
+
+				logger.info(`Created ${results.customers.length} customers`);
 			}
 
 			// Create FX Rates

@@ -16,7 +16,19 @@ import type {
 	TransactionRequest,
 	CreateTransactionRequestPayload,
 	CreateTransactionRequestCounterpartyPayload,
-	User
+	Customer,
+	CustomersResponse,
+	CreateCustomerPayload,
+	CreateCorporateCustomerPayload,
+	UserCustomerLink,
+	UserCustomerLinksResponse,
+	CreateUserCustomerLinkPayload,
+	PersonalDataField,
+	PersonalDataFieldsResponse,
+	CreatePersonalDataFieldPayload,
+	User,
+	AppDirectoryEntry,
+	AppDirectoryResponse
 } from './types';
 
 const logger = createLogger('OBPClient');
@@ -51,6 +63,17 @@ export class OBPClient {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${this.accessToken}`
 		};
+	}
+
+	// App Directory (no auth required)
+	static async getAppDirectory(baseUrl: string, apiVersion: string): Promise<AppDirectoryEntry[]> {
+		const response = await fetch(`${baseUrl}/obp/${apiVersion}/app-directory`);
+		if (!response.ok) {
+			logger.error('Failed to fetch app directory');
+			return [];
+		}
+		const data: AppDirectoryResponse = await response.json();
+		return data.app_directory || [];
 	}
 
 	// User endpoints
@@ -114,6 +137,19 @@ export class OBPClient {
 		} catch {
 			return false;
 		}
+	}
+
+	// Entitlement endpoints
+	async createEntitlement(userId: string, bankId: string, roleName: string): Promise<{ entitlement_id: string; role_name: string; bank_id: string }> {
+		const response = await fetch(this.url(`/users/${userId}/entitlements`), {
+			method: 'POST',
+			headers: this.getHeaders(),
+			body: JSON.stringify({
+				bank_id: bankId,
+				role_name: roleName
+			})
+		});
+		return this.handleResponse(response);
 	}
 
 	// Account endpoints
@@ -334,5 +370,81 @@ export class OBPClient {
 			}
 		);
 		return this.handleResponse<TransactionRequest>(response);
+	}
+
+	// Customer endpoints
+	async getCustomersAtBank(bankId: string): Promise<CustomersResponse> {
+		const response = await fetch(this.url(`/banks/${bankId}/customers`), {
+			headers: this.getHeaders()
+		});
+		return this.handleResponse<CustomersResponse>(response);
+	}
+
+	async getCorporateCustomersAtBank(bankId: string): Promise<CustomersResponse> {
+		const response = await fetch(this.url(`/banks/${bankId}/corporate-customers`), {
+			headers: this.getHeaders()
+		});
+		return this.handleResponse<CustomersResponse>(response);
+	}
+
+	async createCustomer(bankId: string, payload: CreateCustomerPayload): Promise<Customer> {
+		const response = await fetch(this.url(`/banks/${bankId}/customers`), {
+			method: 'POST',
+			headers: this.getHeaders(),
+			body: JSON.stringify(payload)
+		});
+		return this.handleResponse<Customer>(response);
+	}
+
+	async createCorporateCustomer(bankId: string, payload: CreateCorporateCustomerPayload): Promise<Customer> {
+		const response = await fetch(this.url(`/banks/${bankId}/corporate-customers`), {
+			method: 'POST',
+			headers: this.getHeaders(),
+			body: JSON.stringify(payload)
+		});
+		return this.handleResponse<Customer>(response);
+	}
+
+	// User Customer Link endpoints
+	async getUserCustomerLinksByUserId(bankId: string, userId: string): Promise<UserCustomerLinksResponse> {
+		const response = await fetch(this.url(`/banks/${bankId}/user_customer_links/users/${userId}`), {
+			headers: this.getHeaders()
+		});
+		return this.handleResponse<UserCustomerLinksResponse>(response);
+	}
+
+	async createUserCustomerLink(bankId: string, payload: CreateUserCustomerLinkPayload): Promise<UserCustomerLink> {
+		const response = await fetch(this.url(`/banks/${bankId}/user_customer_links`), {
+			method: 'POST',
+			headers: this.getHeaders(),
+			body: JSON.stringify(payload)
+		});
+		return this.handleResponse<UserCustomerLink>(response);
+	}
+
+	// Personal Data Field endpoints
+	async getPersonalDataFields(): Promise<PersonalDataFieldsResponse> {
+		const response = await fetch(this.url('/my/personal-data-fields'), {
+			headers: this.getHeaders()
+		});
+		return this.handleResponse<PersonalDataFieldsResponse>(response);
+	}
+
+	async createPersonalDataField(payload: CreatePersonalDataFieldPayload): Promise<PersonalDataField> {
+		const response = await fetch(this.url('/my/personal-data-fields'), {
+			method: 'POST',
+			headers: this.getHeaders(),
+			body: JSON.stringify(payload)
+		});
+		return this.handleResponse<PersonalDataField>(response);
+	}
+
+	async updatePersonalDataField(attributeId: string, payload: CreatePersonalDataFieldPayload): Promise<PersonalDataField> {
+		const response = await fetch(this.url(`/my/personal-data-fields/${attributeId}`), {
+			method: 'PUT',
+			headers: this.getHeaders(),
+			body: JSON.stringify(payload)
+		});
+		return this.handleResponse<PersonalDataField>(response);
 	}
 }

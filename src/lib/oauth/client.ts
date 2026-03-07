@@ -108,9 +108,7 @@ export class OAuth2ClientWithConfig extends OAuth2Client {
 
 		// Use HTTP Basic Authentication for client credentials (RFC 6749 Section 2.3.1)
 		if (this.storedClientSecret) {
-			const credentials = Buffer.from(`${this.storedClientId}:${this.storedClientSecret}`).toString(
-				'base64'
-			);
+			const credentials = btoa(`${this.storedClientId}:${this.storedClientSecret}`);
 			headers['Authorization'] = `Basic ${credentials}`;
 			logger.debug('Using Basic Authentication for client credentials');
 		} else {

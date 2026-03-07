@@ -195,6 +195,117 @@ export interface CreateTransactionRequestCounterpartyPayload {
 	charge_policy?: string;
 }
 
+// Customer Types
+export interface Customer {
+	bank_id: string;
+	customer_id: string;
+	customer_number: string;
+	legal_name: string;
+	mobile_phone_number: string;
+	email: string;
+	date_of_birth: string;
+	relationship_status: string;
+	dependants: number;
+	dob_of_dependants: string[];
+	credit_rating: { rating: string; source: string };
+	credit_limit: { currency: string; amount: string };
+	highest_education_attained: string;
+	employment_status: string;
+	kyc_status: boolean;
+	last_ok_date: string;
+	title: string;
+	branch_id: string;
+	name_suffix: string;
+	customer_type: string;
+	parent_customer_id: string;
+}
+
+export interface CustomersResponse {
+	customers: Customer[];
+}
+
+export interface CreateCustomerPayload {
+	legal_name: string;
+	mobile_phone_number: string;
+	customer_number?: string;
+	email?: string;
+	date_of_birth?: string;
+	relationship_status?: string;
+	dependants?: number;
+	dob_of_dependants?: string[];
+	credit_rating?: { rating: string; source: string };
+	credit_limit?: { currency: string; amount: string };
+	highest_education_attained?: string;
+	employment_status?: string;
+	kyc_status?: boolean;
+	last_ok_date?: string;
+	title?: string;
+	branch_id?: string;
+	name_suffix?: string;
+}
+
+export interface CreateCorporateCustomerPayload {
+	legal_name: string;
+	mobile_phone_number: string;
+	customer_number?: string;
+	email?: string;
+	credit_rating?: { rating: string; source: string };
+	credit_limit?: { currency: string; amount: string };
+	kyc_status?: boolean;
+	last_ok_date?: string;
+	branch_id?: string;
+	customer_type?: string;
+	parent_customer_id?: string;
+}
+
+// User Customer Link Types
+export interface UserCustomerLink {
+	user_customer_link_id: string;
+	customer_id: string;
+	user_id: string;
+	date_inserted: string;
+	is_active: boolean;
+}
+
+export interface UserCustomerLinksResponse {
+	user_customer_links: UserCustomerLink[];
+}
+
+export interface CreateUserCustomerLinkPayload {
+	user_id: string;
+	customer_id: string;
+}
+
+// Personal Data Field Types
+export interface PersonalDataField {
+	user_attribute_id: string;
+	name: string;
+	type: string;
+	value: string;
+	is_personal: boolean;
+	insert_date: string;
+}
+
+export interface PersonalDataFieldsResponse {
+	user_attributes: PersonalDataField[];
+}
+
+export interface CreatePersonalDataFieldPayload {
+	name: string;
+	type: string;
+	value: string;
+}
+
+// App Directory Types
+export interface AppDirectoryEntry {
+	name: string;
+	value: string;
+}
+
+export interface AppDirectoryResponse {
+	app_directory: AppDirectoryEntry[];
+}
+
 // User Types
 export interface User {
 	user_id: string;

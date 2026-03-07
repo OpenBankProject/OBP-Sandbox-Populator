@@ -139,5 +139,6 @@ declare module 'svelte-kit-sessions' {
 			refresh_token?: string;
 			provider: string;
 		};
+		sandbox_populator_last_bank_id_prefix?: string;
 	}
 }

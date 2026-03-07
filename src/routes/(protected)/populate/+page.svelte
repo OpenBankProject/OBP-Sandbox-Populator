@@ -17,7 +17,9 @@
 		Plus,
 		RotateCcw,
 		Send,
-		ArrowRightLeft
+		ArrowRightLeft,
+		UserCheck,
+		Building2
 	} from '@lucide/svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -27,9 +29,24 @@
 	let isLoadingAccountTxn = $state(false);
 	let numBanks = $state(data.defaults.numBanks);
 	let numAccountsPerBank = $state(data.defaults.numAccountsPerBank);
+	let countryCode = $state(data.defaults.countryCode);
 	let currency = $state(data.defaults.currency);
 	let bankIdPrefix = $state(data.defaults.bankIdPrefix);
+
+	// Map country code to default currency
+	const countryCurrencyMap: Record<string, string> = {};
+	for (const c of data.countries) {
+		countryCurrencyMap[c.code] = c.currency;
+	}
+
+	function onCountryChange(code: string) {
+		countryCode = code;
+		if (countryCurrencyMap[code]) {
+			currency = countryCurrencyMap[code];
+		}
+	}
 	let createCounterparties = $state(true);
+	let createCustomers = $state(true);
 	let createFxRates = $state(true);
 	let createTransactions = $state(true);
 
@@ -57,6 +74,11 @@
 	function formatCounterparties() {
 		if (!form?.results?.counterparties) return '';
 		return form.results.counterparties.map(c => `name: ${c.name}`).join('\n');
+	}
+
+	function formatCustomers() {
+		if (!form?.results?.customers) return '';
+		return form.results.customers.map(c => `${c.customer_type}: ${c.legal_name}`).join('\n');
 	}
 
 	function formatFxRates() {
@@ -92,6 +114,7 @@
 			data.existing.banks.length > 0 ||
 			data.existing.accounts.length > 0 ||
 			data.existing.counterparties.length > 0 ||
+			data.existing.customers.length > 0 ||
 			data.existing.fxRates.length > 0 ||
 			data.existing.transactions.length > 0
 		);
@@ -111,6 +134,11 @@
 	function formatExistingCounterparties() {
 		if (!data.existing?.counterparties) return '';
 		return data.existing.counterparties.map(c => `name: ${c.name}`).join('\n');
+	}
+
+	function formatExistingCustomers() {
+		if (!data.existing?.customers) return '';
+		return data.existing.customers.map(c => `${c.customer_type}: ${c.legal_name}`).join('\n');
 	}
 
 	function formatExistingFxRates() {
@@ -185,8 +213,23 @@
 				</div>
 				<p class="text-xs text-surface-500 -mt-2">Banks will be: <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.1</code>, <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.2</code>, ...</p>
 
-				<!-- Currency & Accounts per Bank -->
+				<!-- Country & Currency -->
 				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label for="country" class="block text-sm font-medium mb-1">Country</label>
+						<select
+							id="country"
+							name="country"
+							bind:value={countryCode}
+							onchange={() => onCountryChange(countryCode)}
+							class="select w-full"
+							disabled={isLoading}
+						>
+							{#each data.countries as country}
+								<option value={country.code}>{country.name}</option>
+							{/each}
+						</select>
+					</div>
 					<div>
 						<label for="currency" class="block text-sm font-medium mb-1">Currency</label>
 						<select
@@ -200,9 +243,17 @@
 							<option value="USD">USD - US Dollar</option>
 							<option value="EUR">EUR - Euro</option>
 							<option value="GBP">GBP - British Pound</option>
+							<option value="JPY">JPY - Japanese Yen</option>
+							<option value="SGD">SGD - Singapore Dollar</option>
 							<option value="ZAR">ZAR - South African Rand</option>
+							<option value="NGN">NGN - Nigerian Naira</option>
+							<option value="TZS">TZS - Tanzanian Shilling</option>
 						</select>
 					</div>
+				</div>
+
+				<!-- Accounts per Bank -->
+				<div class="grid grid-cols-2 gap-4">
 					<div>
 						<label for="numAccountsPerBank" class="block text-sm font-medium mb-1">Accounts per Bank</label>
 						<input
@@ -234,7 +285,21 @@
 						/>
 						<span class="flex items-center gap-2">
 							<Users class="size-4 text-tertiary-500" />
-							Create Counterparties (Botswana businesses)
+							Create Counterparties (local businesses)
+						</span>
+					</label>
+
+					<label class="flex items-center gap-3 cursor-pointer">
+						<input
+							type="checkbox"
+							name="createCustomers"
+							bind:checked={createCustomers}
+							class="checkbox"
+							disabled={isLoading}
+						/>
+						<span class="flex items-center gap-2">
+							<UserCheck class="size-4 text-tertiary-500" />
+							Create Customers (my + 5 individual + 5 corporate)
 						</span>
 					</label>
 
@@ -248,7 +313,7 @@
 						/>
 						<span class="flex items-center gap-2">
 							<TrendingUp class="size-4 text-tertiary-500" />
-							Create FX Rates (African currencies + CNY)
+							Create FX Rates
 						</span>
 					</label>
 
@@ -371,13 +436,19 @@
 						{#if createCounterparties}
 							<li class="flex items-center gap-3">
 								<Loader2 class="size-4 animate-spin text-primary-400" />
-								<span>Adding Botswana business counterparties...</span>
+								<span>Adding business counterparties...</span>
+							</li>
+						{/if}
+						{#if createCustomers}
+							<li class="flex items-center gap-3">
+								<Loader2 class="size-4 animate-spin text-primary-400" />
+								<span>Creating individual and corporate customers...</span>
 							</li>
 						{/if}
 						{#if createFxRates}
 							<li class="flex items-center gap-3">
 								<Loader2 class="size-4 animate-spin text-primary-400" />
-								<span>Setting up FX rates for African currencies...</span>
+								<span>Setting up FX rates...</span>
 							</li>
 						{/if}
 						{#if createTransactions}
@@ -415,7 +486,7 @@
 								{#each form.results.transactionRequests as txnReq}
 									<li class="flex items-center gap-1">
 										<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
-										<code class="text-xs bg-surface-700 px-1 rounded">{txnReq.id}</code>
+										<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{txnReq.id}</code>
 										<span class="text-surface-500 mx-1">|</span>
 										<span class="text-tertiary-400">{txnReq.amount}</span>
 										<span class="text-surface-500 mx-1">→</span>
@@ -485,7 +556,7 @@
 											href={getBankUrl(bank)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
 										>
-											<code class="text-xs bg-surface-700 px-1 rounded">{bank.bank_id}</code>
+											<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{bank.bank_id}</code>
 											<ExternalLink class="size-3" />
 										</a>
 										<span class="text-surface-500 mx-1">|</span>
@@ -537,7 +608,7 @@
 											href={getAccountUrl(account)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
 										>
-											<code class="text-xs bg-surface-700 px-1 rounded">{account.account_id}</code>
+											<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{account.account_id}</code>
 											<ExternalLink class="size-3" />
 										</a>
 										<span class="text-surface-500 mx-1">|</span>
@@ -600,6 +671,57 @@
 						{/if}
 					</div>
 
+					<!-- Customers -->
+					<div class="p-3 rounded-lg bg-surface-800/50">
+						<div class="flex items-center justify-between mb-2">
+							<div class="flex items-center gap-2">
+								<UserCheck class="size-4 text-secondary-500" />
+								<span class="font-medium">Customers: {form.results.customers.length}</span>
+								{#if form.results.customers.filter(c => !c.existed).length > 0}
+									<span class="text-xs text-success-400">{form.results.customers.filter(c => !c.existed).length} new</span>
+								{/if}
+								{#if form.results.customers.filter(c => c.existed).length > 0}
+									<span class="text-xs text-warning-400">{form.results.customers.filter(c => c.existed).length} existing</span>
+								{/if}
+							</div>
+							{#if form.results.customers.length > 0}
+								<button
+									type="button"
+									onclick={() => copyToClipboard('customers', formatCustomers())}
+									class="btn btn-sm preset-tonal flex items-center gap-1"
+									title="Copy customers"
+								>
+									{#if copiedSection === 'customers'}
+										<Check class="size-3" />
+									{:else}
+										<Copy class="size-3" />
+									{/if}
+								</button>
+							{/if}
+						</div>
+						{#if form.results.customers.length > 0}
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
+								{#each form.results.customers as cust}
+									<li class="flex items-center gap-1">
+										{#if cust.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
+										{#if cust.customer_type === 'CORPORATE'}
+											<Building2 class="size-3 text-tertiary-400" />
+										{:else}
+											<UserCheck class="size-3 text-tertiary-400" />
+										{/if}
+										<span class="text-surface-300">{cust.legal_name}</span>
+										<span class="text-surface-500 mx-1">|</span>
+										<span class="text-xs px-1 rounded {cust.customer_type === 'CORPORATE' ? 'bg-tertiary-700' : 'bg-secondary-700'}">{cust.customer_type}</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+
 					<!-- FX Rates -->
 					<div class="p-3 rounded-lg bg-surface-800/50">
 						<div class="flex items-center justify-between mb-2">
@@ -638,7 +760,7 @@
 											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
 										{/if}
 										<span>{fx.from_currency} → {fx.to_currency}:</span>
-										<code class="text-xs bg-surface-700 px-1 rounded">{fx.rate}</code>
+										<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{fx.rate}</code>
 									</li>
 								{/each}
 								{#if form.results.fxRates.length > 10}
@@ -689,7 +811,7 @@
 											href={getTransactionUrl(txn)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
 										>
-											<code class="text-xs bg-surface-700 px-1 rounded">{txn.transaction_id}</code>
+											<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{txn.transaction_id}</code>
 											<ExternalLink class="size-3" />
 										</a>
 										<span class="text-surface-500 mx-1">|</span>
@@ -770,7 +892,7 @@
 											href={getBankUrl(bank)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
 										>
-											<code class="text-xs bg-surface-700 px-1 rounded">{bank.bank_id}</code>
+											<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{bank.bank_id}</code>
 											<ExternalLink class="size-3" />
 										</a>
 										<span class="text-surface-500 mx-1">|</span>
@@ -809,7 +931,7 @@
 											href={getAccountUrl(account)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
 										>
-											<code class="text-xs bg-surface-700 px-1 rounded">{account.account_id}</code>
+											<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{account.account_id}</code>
 											<ExternalLink class="size-3" />
 										</a>
 										<span class="text-surface-500 mx-1">|</span>
@@ -861,6 +983,44 @@
 						</div>
 					{/if}
 
+					<!-- Existing Customers -->
+					{#if data.existing.customers.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center gap-2">
+									<UserCheck class="size-4 text-secondary-500" />
+									<span class="font-medium">Customers: {data.existing.customers.length}</span>
+								</div>
+								<button
+									type="button"
+									onclick={() => copyToClipboard('existingCustomers', formatExistingCustomers())}
+									class="btn btn-sm preset-tonal flex items-center gap-1"
+									title="Copy customers"
+								>
+									{#if copiedSection === 'existingCustomers'}
+										<Check class="size-3" />
+									{:else}
+										<Copy class="size-3" />
+									{/if}
+								</button>
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
+								{#each data.existing.customers as cust}
+									<li class="flex items-center gap-1">
+										{#if cust.customer_type === 'CORPORATE'}
+											<Building2 class="size-3 text-tertiary-400" />
+										{:else}
+											<UserCheck class="size-3 text-tertiary-400" />
+										{/if}
+										<span class="text-surface-300">{cust.legal_name}</span>
+										<span class="text-surface-500 mx-1">|</span>
+										<span class="text-xs px-1 rounded {cust.customer_type === 'CORPORATE' ? 'bg-tertiary-700' : 'bg-secondary-700'}">{cust.customer_type}</span>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
 					<!-- Existing FX Rates -->
 					{#if data.existing.fxRates.length > 0}
 						<div class="p-3 rounded-lg bg-surface-800/50">
@@ -884,7 +1044,7 @@
 							</div>
 							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
 								{#each data.existing.fxRates.slice(0, 10) as fx}
-									<li>{fx.from_currency} → {fx.to_currency}: <code class="text-xs bg-surface-700 px-1 rounded">{fx.rate}</code></li>
+									<li>{fx.from_currency} → {fx.to_currency}: <code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{fx.rate}</code></li>
 								{/each}
 								{#if data.existing.fxRates.length > 10}
 									<li class="text-surface-500">...and {data.existing.fxRates.length - 10} more</li>
@@ -921,7 +1081,7 @@
 											href={getTransactionUrl(txn)}
 											class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
 										>
-											<code class="text-xs bg-surface-700 px-1 rounded">{txn.transaction_id}</code>
+											<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{txn.transaction_id}</code>
 											<ExternalLink class="size-3" />
 										</a>
 										<span class="text-surface-500 mx-1">|</span>
