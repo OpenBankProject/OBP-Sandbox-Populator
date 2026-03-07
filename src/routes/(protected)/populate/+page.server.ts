@@ -44,18 +44,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const username = user?.username || 'unknown';
 	const defaultPrefix = getUsernamePrefix(username);
 
-	// Try to load saved prefix from OBP Personal Data Field, then session, then derive from username
+	// Try to load saved settings from OBP Personal Data Fields, then session
 	let bankIdPrefix = defaultPrefix;
+	let countryCode = 'BW';
+	let currency = 'BWP';
 	if (accessToken) {
 		const client = new OBPClient(env.PUBLIC_OBP_BASE_URL, 'v6.0.0', accessToken);
 		try {
 			const fields = await client.getPersonalDataFields();
-			const saved = (fields.user_attributes || []).find(
-				(f) => f.name === 'sandbox_populator_last_bank_id_prefix'
-			);
-			if (saved?.value) {
-				bankIdPrefix = saved.value;
-			}
+			const attrs = fields.user_attributes || [];
+			const savedPrefix = attrs.find((f) => f.name === 'sandbox_populator_last_bank_id_prefix');
+			if (savedPrefix?.value) bankIdPrefix = savedPrefix.value;
+			const savedCountry = attrs.find((f) => f.name === 'sandbox_populator_last_country');
+			if (savedCountry?.value) countryCode = savedCountry.value;
+			const savedCurrency = attrs.find((f) => f.name === 'sandbox_populator_last_currency');
+			if (savedCurrency?.value) currency = savedCurrency.value;
 		} catch (e) {
 			logger.warn('Could not load personal data fields');
 		}
@@ -205,8 +208,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		defaults: {
 			numBanks: 2,
 			numAccountsPerBank: 5,
-			countryCode: 'BW',
-			currency: 'BWP',
+			countryCode,
+			currency,
 			bankIdPrefix
 		},
 		existing
@@ -250,7 +253,7 @@ export const actions: Actions = {
 			accessToken
 		);
 
-		// Save the last used prefix to session and OBP Personal Data Field
+		// Save settings to session and OBP Personal Data Fields
 		try {
 			await session.setData({
 				...session.data,
@@ -258,29 +261,37 @@ export const actions: Actions = {
 			});
 			await session.save();
 		} catch (e) {
-			logger.warn('Could not save bank ID prefix to session');
+			logger.warn('Could not save settings to session');
 		}
 		try {
 			const fields = await client.getPersonalDataFields();
-			const existing = (fields.user_attributes || []).find(
-				(f) => f.name === 'sandbox_populator_last_bank_id_prefix'
-			);
-			if (existing) {
-				await client.updatePersonalDataField(existing.user_attribute_id, {
-					name: 'sandbox_populator_last_bank_id_prefix',
-					type: 'STRING',
-					value: bankIdPrefix
-				});
-			} else {
-				await client.createPersonalDataField({
-					name: 'sandbox_populator_last_bank_id_prefix',
-					type: 'STRING',
-					value: bankIdPrefix
-				});
+			const attrs = fields.user_attributes || [];
+
+			const settingsToSave = [
+				{ name: 'sandbox_populator_last_bank_id_prefix', value: bankIdPrefix },
+				{ name: 'sandbox_populator_last_country', value: countryCode },
+				{ name: 'sandbox_populator_last_currency', value: currency },
+			];
+
+			for (const setting of settingsToSave) {
+				const existing = attrs.find((f) => f.name === setting.name);
+				if (existing) {
+					await client.updatePersonalDataField(existing.user_attribute_id, {
+						name: setting.name,
+						type: 'STRING',
+						value: setting.value
+					});
+				} else {
+					await client.createPersonalDataField({
+						name: setting.name,
+						type: 'STRING',
+						value: setting.value
+					});
+				}
 			}
-			logger.info(`Saved bank ID prefix "${bankIdPrefix}" to personal data field`);
+			logger.info(`Saved populate settings to personal data fields`);
 		} catch (e) {
-			logger.warn('Could not save bank ID prefix to OBP personal data field');
+			logger.warn('Could not save settings to OBP personal data fields');
 		}
 
 		const createCounterparties = formData.get('createCounterparties') === 'on';
