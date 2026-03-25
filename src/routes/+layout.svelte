@@ -25,6 +25,7 @@
 
 		const labelMap: Record<string, string> = {
 			populate: 'Populate Sandbox',
+			csv: 'Import from CSV',
 			login: 'Login',
 			logout: 'Logout',
 			user: 'My Account',

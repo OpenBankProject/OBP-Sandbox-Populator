@@ -23,6 +23,8 @@ import type {
 	UserCustomerLink,
 	UserCustomerLinksResponse,
 	CreateUserCustomerLinkPayload,
+	CustomerAccountLink,
+	CreateCustomerAccountLinkPayload,
 	PersonalDataField,
 	PersonalDataFieldsResponse,
 	CreatePersonalDataFieldPayload,
@@ -419,6 +421,16 @@ export class OBPClient {
 			body: JSON.stringify(payload)
 		});
 		return this.handleResponse<UserCustomerLink>(response);
+	}
+
+	// Customer Account Link endpoints
+	async createCustomerAccountLink(bankId: string, payload: CreateCustomerAccountLinkPayload): Promise<CustomerAccountLink> {
+		const response = await fetch(this.url(`/banks/${bankId}/customer-account-links`), {
+			method: 'POST',
+			headers: this.getHeaders(),
+			body: JSON.stringify(payload)
+		});
+		return this.handleResponse<CustomerAccountLink>(response);
 	}
 
 	// Personal Data Field endpoints

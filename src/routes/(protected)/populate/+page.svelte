@@ -172,10 +172,13 @@
 
 <div class="p-8 w-full">
 	<h1 class="h1 mb-2">Populate Sandbox</h1>
-	<p class="text-surface-400 mb-8">
+	<p class="text-surface-400 mb-4">
 		Configure and create test data for your OBP sandbox as <span class="text-secondary-400"
 			>{data.username}</span
 		>
+	</p>
+	<p class="text-surface-500 text-sm mb-8">
+		Or <a href="/populate/csv" class="text-primary-400 hover:text-primary-300 underline">import data from CSV files</a> instead.
 	</p>
 
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">

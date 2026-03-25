@@ -275,6 +275,22 @@ export interface CreateUserCustomerLinkPayload {
 	customer_id: string;
 }
 
+// Customer Account Link Types
+export interface CustomerAccountLink {
+	customer_account_link_id: string;
+	customer_id: string;
+	bank_id: string;
+	account_id: string;
+	relationship_type: string;
+}
+
+export interface CreateCustomerAccountLinkPayload {
+	customer_id: string;
+	bank_id: string;
+	account_id: string;
+	relationship_type: string;
+}
+
 // Personal Data Field Types
 export interface PersonalDataField {
 	user_attribute_id: string;
