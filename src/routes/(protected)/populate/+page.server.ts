@@ -208,6 +208,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		defaults: {
 			numBanks: 2,
 			numAccountsPerBank: 5,
+			numUsers: 3,
 			countryCode,
 			currency,
 			bankIdPrefix
@@ -298,6 +299,9 @@ export const actions: Actions = {
 		const createCustomers = formData.get('createCustomers') === 'on';
 		const createFxRates = formData.get('createFxRates') === 'on';
 		const createTransactions = formData.get('createTransactions') === 'on';
+		const createUsers = formData.get('createUsers') === 'on';
+		const numUsers = parseInt(formData.get('numUsers') as string) || 3;
+		const createUserCustomerLinks = formData.get('createUserCustomerLinks') === 'on';
 
 		const results: {
 			banks: Array<{ bank_id: string; bank_code: string; full_name: string; existed: boolean }>;
@@ -306,6 +310,8 @@ export const actions: Actions = {
 			customers: Array<{ customer_id: string; legal_name: string; customer_type: string; bank_id: string; existed: boolean }>;
 			fxRates: Array<{ bank_id: string; from_currency: string; to_currency: string; rate: number; existed: boolean }>;
 			transactions: Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string; existed: boolean }>;
+			users: Array<{ user_id: string; username: string; email: string; existed: boolean }>;
+			userCustomerLinks: Array<{ username: string; legal_name: string; bank_id: string; existed: boolean }>;
 			errors: string[];
 		} = {
 			banks: [],
@@ -314,6 +320,8 @@ export const actions: Actions = {
 			customers: [],
 			fxRates: [],
 			transactions: [],
+			users: [],
+			userCustomerLinks: [],
 			errors: []
 		};
 
@@ -837,6 +845,90 @@ export const actions: Actions = {
 				logger.info(`Created ${results.transactions.length} historical transactions`);
 			}
 
+			// Create Users
+			if (createUsers) {
+				logger.info(`Creating ${numUsers} users...`);
+				const TEST_PASSWORD = 'Test1234!';
+				const individualData = getIndividualCustomers(countryCode, numUsers);
+
+				for (let i = 1; i <= numUsers; i++) {
+					const custData = individualData[i - 1];
+					const nameParts = custData ? custData.legal_name.split(' ') : [];
+					const firstName = nameParts[0] || `User${i}`;
+					const lastName = nameParts[nameParts.length - 1] || 'Test';
+					const username = `${bankIdPrefix}user${i}`;
+					const email = `${bankIdPrefix}user${i}@example.com`;
+
+					try {
+						const newUser = await client.createUser({
+							email,
+							username,
+							password: TEST_PASSWORD,
+							first_name: firstName,
+							last_name: lastName
+						});
+						results.users.push({
+							user_id: newUser.user_id,
+							username: newUser.username,
+							email: newUser.email,
+							existed: false
+						});
+						logger.info(`Created user: ${username}`);
+					} catch (e: any) {
+						const msg: string = e.message || '';
+						if (msg.includes('already') || msg.includes('exists') || msg.includes('OBP-30010')) {
+							results.users.push({ user_id: '', username, email, existed: true });
+							logger.info(`User ${username} already exists, skipping`);
+						} else {
+							const errorMsg = `Failed to create user ${username}: ${msg}`;
+							logger.error(errorMsg);
+							results.errors.push(errorMsg);
+						}
+					}
+					await delay(100);
+				}
+				logger.info(`Created ${results.users.filter(u => !u.existed).length} users`);
+			}
+
+			// Create User-Customer Links
+			if (createUserCustomerLinks && results.users.length > 0 && results.customers.length > 0 && results.banks.length > 0) {
+				logger.info('Creating user-customer links...');
+				const firstBank = results.banks[0];
+				const individualCustomers = results.customers.filter(c => c.customer_type === 'INDIVIDUAL');
+
+				for (let i = 0; i < results.users.length; i++) {
+					const obpUser = results.users[i];
+					if (!obpUser.user_id) {
+						logger.info(`Skipping user-customer link for ${obpUser.username}: no user_id (already existed)`);
+						continue;
+					}
+					const customer = individualCustomers[i % individualCustomers.length];
+					if (!customer) continue;
+
+					try {
+						const existingLinks = await client.getUserCustomerLinksByUserId(firstBank.bank_id, obpUser.user_id);
+						const alreadyLinked = existingLinks.user_customer_links?.some(l => l.customer_id === customer.customer_id);
+						if (alreadyLinked) {
+							results.userCustomerLinks.push({ username: obpUser.username, legal_name: customer.legal_name, bank_id: firstBank.bank_id, existed: true });
+							logger.info(`Link ${obpUser.username} → ${customer.legal_name} already exists, skipping`);
+						} else {
+							await client.createUserCustomerLink(firstBank.bank_id, {
+								user_id: obpUser.user_id,
+								customer_id: customer.customer_id
+							});
+							results.userCustomerLinks.push({ username: obpUser.username, legal_name: customer.legal_name, bank_id: firstBank.bank_id, existed: false });
+							logger.info(`Linked user ${obpUser.username} → customer ${customer.legal_name}`);
+						}
+					} catch (e: any) {
+						const errorMsg = `User-customer link ${obpUser.username} → ${customer.legal_name}: ${e.message}`;
+						logger.error(errorMsg);
+						results.errors.push(errorMsg);
+					}
+					await delay(100);
+				}
+				logger.info(`Created ${results.userCustomerLinks.filter(l => !l.existed).length} user-customer links`);
+			}
+
 			return {
 				success: true,
 				results
@@ -848,6 +940,127 @@ export const actions: Actions = {
 				results
 			});
 		}
+	},
+
+	preview: async ({ request, locals }) => {
+		const user = locals.session?.data?.user;
+		if (!user) return fail(401, { error: 'Not authenticated' });
+
+		const formData = await request.formData();
+		const numBanks = parseInt(formData.get('numBanks') as string) || 2;
+		const numAccountsPerBank = parseInt(formData.get('numAccountsPerBank') as string) || 5;
+		const currency = (formData.get('currency') as string) || 'BWP';
+		const countryCode = (formData.get('country') as string) || 'BW';
+		const bankIdPrefix = (formData.get('bankIdPrefix') as string) || getUsernamePrefix(user.username);
+		const withCounterparties = formData.get('createCounterparties') === 'on';
+		const withCustomers = formData.get('createCustomers') === 'on';
+		const withFxRates = formData.get('createFxRates') === 'on';
+		const withTransactions = formData.get('createTransactions') === 'on';
+		const withUsers = formData.get('createUsers') === 'on';
+		const numUsers = parseInt(formData.get('numUsers') as string) || 3;
+		const withUserCustomerLinks = formData.get('createUserCustomerLinks') === 'on';
+
+		// Banks
+		const banks = Array.from({ length: numBanks }, (_, i) => ({
+			bank_id: `${bankIdPrefix}.bnk.${i + 1}`,
+			full_name: `${user.username} Test Bank ${i + 1}`,
+			bank_code: `${bankIdPrefix}${i + 1}${countryCode}`
+		}));
+
+		// Accounts
+		const accounts = banks.flatMap(bank =>
+			Array.from({ length: numAccountsPerBank }, (_, j) => ({
+				bank_id: bank.bank_id,
+				label: `Account ${j + 1}`,
+				currency
+			}))
+		);
+
+		// Counterparties
+		const counterparties = withCounterparties
+			? getBusinesses(countryCode, 10).map(b => ({ name: b.name, industry: b.industry }))
+			: [];
+
+		// Customers
+		const customers = withCustomers ? [
+			{ legal_name: `${user.username} (Individual)`, type: 'INDIVIDUAL', note: 'your individual customer' },
+			{ legal_name: `${user.username} Corp (Pty) Ltd`, type: 'CORPORATE', note: 'your corporate customer' },
+			...getIndividualCustomers(countryCode, 5).map(c => ({ legal_name: c.legal_name, type: 'INDIVIDUAL', note: 'sample' })),
+			...getCorporateCustomers(countryCode, 5).map(c => ({ legal_name: c.legal_name, type: 'CORPORATE', note: 'sample' }))
+		] : [];
+
+		// FX rates
+		const fxRatePairs = withFxRates
+			? banks.flatMap(bank =>
+				Object.entries(FX_RATES).flatMap(([target, rate]) => [
+					{ bank_id: bank.bank_id, from: currency, to: target, rate },
+					{ bank_id: bank.bank_id, from: target, to: currency, rate: parseFloat((1 / rate).toFixed(6)) }
+				])
+			)
+			: [];
+
+		// Transactions — amounts are random at runtime, describe count only
+		const transactionCount = withTransactions
+			? banks.filter(b => accounts.filter(a => a.bank_id === b.bank_id).length >= 2).length * 12
+			: 0;
+
+		// Users
+		const users = withUsers
+			? Array.from({ length: numUsers }, (_, i) => ({
+				username: `${bankIdPrefix}user${i + 1}`,
+				email: `${bankIdPrefix}user${i + 1}@example.com`
+			}))
+			: [];
+
+		// User-Customer Links preview
+		const individualCustomersPreview = withCustomers
+			? [
+				{ legal_name: `${user.username} (Individual)`, type: 'INDIVIDUAL' },
+				...getIndividualCustomers(countryCode, 5).map(c => ({ legal_name: c.legal_name, type: 'INDIVIDUAL' }))
+			]
+			: [];
+		const userCustomerLinks = withUserCustomerLinks && withUsers && individualCustomersPreview.length > 0
+			? users.map((u, i) => ({
+				username: u.username,
+				legal_name: individualCustomersPreview[i % individualCustomersPreview.length]?.legal_name ?? ''
+			}))
+			: [];
+
+		const totalEntities =
+			banks.length +
+			accounts.length +
+			counterparties.length +
+			customers.length +
+			fxRatePairs.length +
+			transactionCount +
+			users.length +
+			userCustomerLinks.length;
+
+		return {
+			preview: {
+				banks,
+				accounts,
+				counterparties,
+				customers,
+				fxRatePairs,
+				transactions: withTransactions
+					? { count: transactionCount, note: '12 monthly historical transactions per bank, amounts are random at populate time' }
+					: null,
+				users,
+				userCustomerLinks,
+				summary: {
+					banks: banks.length,
+					accounts: accounts.length,
+					counterparties: counterparties.length,
+					customers: customers.length,
+					fxRatePairs: fxRatePairs.length,
+					transactions: transactionCount,
+					users: users.length,
+					userCustomerLinks: userCustomerLinks.length,
+					total: totalEntities
+				}
+			}
+		};
 	},
 
 	createCounterpartyTransactionRequests: async ({ locals }) => {

@@ -255,6 +255,7 @@ export interface CreateCorporateCustomerPayload {
 	branch_id?: string;
 	customer_type?: string;
 	parent_customer_id?: string;
+	category?: string;
 }
 
 // User Customer Link Types
@@ -335,5 +336,28 @@ export interface User {
 	};
 	views: {
 		list: object[];
+	};
+}
+
+export interface CreateUserPayload {
+	email: string;
+	username: string;
+	password: string;
+	first_name: string;
+	last_name: string;
+}
+
+export interface CreateUserResponse {
+	user_id: string;
+	email: string;
+	provider_id: string;
+	provider: string;
+	username: string;
+	entitlements: {
+		list: Array<{
+			entitlement_id: string;
+			role_name: string;
+			bank_id: string;
+		}>;
 	};
 }
