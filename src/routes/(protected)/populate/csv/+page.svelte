@@ -11,9 +11,7 @@
 		Building,
 		Wallet,
 		Users,
-		TrendingUp,
-		ArrowRightLeft,
-		Link
+		TrendingUp
 	} from '@lucide/svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -24,17 +22,13 @@
 	let banksCsv = $state('');
 	let accountsCsv = $state('');
 	let customersCsv = $state('');
-	let counterpartiesCsv = $state('');
 	let transactionsCsv = $state('');
-	let fxRatesCsv = $state('');
 
 	// Preview row counts
 	let banksCount = $derived(countCsvRows(banksCsv));
 	let accountsCount = $derived(countCsvRows(accountsCsv));
 	let customersCount = $derived(countCsvRows(customersCsv));
-	let counterpartiesCount = $derived(countCsvRows(counterpartiesCsv));
 	let transactionsCount = $derived(countCsvRows(transactionsCsv));
-	let fxRatesCount = $derived(countCsvRows(fxRatesCsv));
 
 	function countCsvRows(csv: string): number {
 		if (!csv.trim()) return 0;
@@ -58,9 +52,7 @@
 			banksCsv.trim() ||
 			accountsCsv.trim() ||
 			customersCsv.trim() ||
-			counterpartiesCsv.trim() ||
-			transactionsCsv.trim() ||
-			fxRatesCsv.trim()
+			transactionsCsv.trim()
 		);
 	}
 
@@ -68,84 +60,57 @@
 	const templates: Record<string, { filename: string; content: string }> = {
 		banks: {
 			filename: 'banks_template.csv',
-			content: `name,short_code,website,logo_url
-First National Bank,FNB,https://fnb.example.com,
-Community Savings Bank,CSB,https://csb.example.com,`
+			content: `full_name,bank_code
+First National Bank,FNB
+Community Savings Bank,CSB`
 		},
 		accounts: {
 			filename: 'accounts_template.csv',
-			content: `bank,account_name,currency,opening_balance,account_holder
-FNB,Business Current Account,USD,0,Jane Smith
-FNB,Savings Account,USD,0,Jane Smith
-CSB,Trading Account,EUR,0,Acme Corp`
+			content: `bank_code,number,currency,legal_name
+FNB,10010001,USD,Jane Smith
+FNB,10010002,USD,Jane Smith
+CSB,20010001,EUR,Acme Corp`
 		},
 		customers: {
 			filename: 'customers_template.csv',
-			content: `name,type,phone,email,date_of_birth,title,employment_status,education,relationship_status,category,bank
+			content: `legal_name,customer_type,mobile_phone_number,email,date_of_birth,title,employment_status,highest_education_attained,relationship_status,category,bank_code
 Jane Smith,individual,+1 555 0101,jane@example.com,1985-03-15,Ms,employed,Bachelor,single,,FNB
 John Doe,individual,+1 555 0102,john@example.com,1978-11-22,Mr,employed,Master,married,,FNB
 Acme Corp,corporate,+1 555 0200,info@acme.example.com,,,,,,,CSB`
 		},
-		counterparties: {
-			filename: 'counterparties_template.csv',
-			content: `business_name,description,category,location,currency,bank,account
-Coffee House,Local coffee shop,Food & Beverage,Main Street,USD,FNB,Business Current Account
-Office Supplies Co,Office supply store,Retail,Downtown,USD,FNB,Business Current Account`
-		},
 		transactions: {
 			filename: 'transactions_template.csv',
-			content: `date,from_account,from_bank,to_account,to_bank,amount,currency,description
-2024-06-15,Business Current Account,FNB,Savings Account,FNB,500.00,USD,Monthly savings transfer
-2024-06-16,Business Current Account,FNB,Savings Account,FNB,250.00,USD,Expense reimbursement`
-		},
-		fx_rates: {
-			filename: 'fx_rates_template.csv',
-			content: `bank,from_currency,to_currency,rate,date
-FNB,USD,EUR,0.92,2024-06-15
-FNB,USD,GBP,0.79,2024-06-15
-FNB,EUR,USD,1.09,2024-06-15`
+			content: `date,from_account_number,from_bank_code,to_account_number,to_bank_code,amount,currency,description
+2024-06-15,10010001,FNB,10010002,FNB,500.00,USD,Monthly savings transfer
+2024-06-16,10010001,FNB,10010002,FNB,250.00,USD,Expense reimbursement`
 		}
 	};
 
 	// Example data — a complete, realistic set you can import right away
 	const exampleData = {
-		banks: `name,short_code,website,logo_url
-Greenfield Community Bank,GCB,https://gcb.example.com,
-Riverside Savings & Loans,RSL,https://rsl.example.com,`,
-		accounts: `bank,account_name,currency,opening_balance,account_holder
-GCB,Main Operating Account,USD,0,Maria Garcia
-GCB,Payroll Account,USD,0,Maria Garcia
-GCB,Tax Reserve Account,USD,0,James Chen
-GCB,Marketing Budget,USD,0,Sunrise Bakery Ltd
-RSL,Euro Trading Account,EUR,0,James Chen
-RSL,Investment Account,EUR,0,Sunrise Bakery Ltd`,
-		customers: `name,type,phone,email,date_of_birth,title,employment_status,education,relationship_status,category,bank
+		banks: `full_name,bank_code
+Greenfield Community Bank,GCB
+Riverside Savings & Loans,RSL`,
+		accounts: `bank_code,number,currency,legal_name
+GCB,GCB-0001,USD,Maria Garcia
+GCB,GCB-0002,USD,Maria Garcia
+GCB,GCB-0003,USD,James Chen
+GCB,GCB-0004,USD,Sunrise Bakery Ltd
+RSL,RSL-0001,EUR,James Chen
+RSL,RSL-0002,EUR,Sunrise Bakery Ltd`,
+		customers: `legal_name,customer_type,mobile_phone_number,email,date_of_birth,title,employment_status,highest_education_attained,relationship_status,category,bank_code
 Maria Garcia,individual,+1 555 0101,maria.garcia@example.com,1985-03-15,Ms,employed,Bachelor,married,,GCB
 James Chen,individual,+1 555 0102,james.chen@example.com,1978-11-22,Mr,self-employed,Master,single,,GCB
 Priya Patel,individual,+1 555 0103,priya.patel@example.com,1992-07-08,Dr,employed,Doctorate,married,,GCB
 Sunrise Bakery Ltd,corporate,+1 555 0200,info@sunrisebakery.example.com,,,,,,Food & Beverage,GCB
 James Chen,individual,+44 20 7946 0102,james.chen@example.com,1978-11-22,Mr,self-employed,Master,single,,RSL
 Sunrise Bakery Ltd,corporate,+44 20 7946 0200,info@sunrisebakery.example.com,,,,,,Food & Beverage,RSL`,
-		counterparties: `business_name,description,category,location,currency,bank,account
-Daily Grind Coffee,Artisan coffee roaster and cafe,Food & Beverage,High Street,USD,GCB,Main Operating Account
-TechParts Direct,Computer hardware and components,Retail - Electronics,Industrial Park,USD,GCB,Main Operating Account
-Green Valley Farms,Organic produce supplier,Agriculture,Valley Road,USD,GCB,Main Operating Account
-CloudHost Solutions,Web hosting and cloud services,Technology,Downtown,USD,GCB,Marketing Budget
-Euro Office Supplies,Stationery and office equipment,Retail,Amsterdam,EUR,RSL,Euro Trading Account`,
-		transactions: `date,from_account,from_bank,to_account,to_bank,amount,currency,description
-2024-06-01,Main Operating Account,GCB,Payroll Account,GCB,12500.00,USD,June payroll funding
-2024-06-05,Main Operating Account,GCB,Tax Reserve Account,GCB,3200.00,USD,Quarterly tax provision
-2024-06-10,Main Operating Account,GCB,Marketing Budget,GCB,2000.00,USD,Q3 marketing budget
-2024-06-15,Payroll Account,GCB,Main Operating Account,GCB,850.00,USD,Payroll correction refund
-2024-06-20,Euro Trading Account,RSL,Investment Account,RSL,5000.00,EUR,Investment transfer`,
-		fx_rates: `bank,from_currency,to_currency,rate,date
-GCB,USD,EUR,0.92,2024-06-15
-GCB,USD,GBP,0.79,2024-06-15
-GCB,EUR,USD,1.09,2024-06-15
-GCB,GBP,USD,1.27,2024-06-15
-RSL,EUR,USD,1.09,2024-06-15
-RSL,EUR,GBP,0.86,2024-06-15
-RSL,USD,EUR,0.92,2024-06-15`
+		transactions: `date,from_account_number,from_bank_code,to_account_number,to_bank_code,amount,currency,description
+2024-06-01,GCB-0001,GCB,GCB-0002,GCB,12500.00,USD,June payroll funding
+2024-06-05,GCB-0001,GCB,GCB-0003,GCB,3200.00,USD,Quarterly tax provision
+2024-06-10,GCB-0001,GCB,GCB-0004,GCB,2000.00,USD,Q3 marketing budget
+2024-06-15,GCB-0002,GCB,GCB-0001,GCB,850.00,USD,Payroll correction refund
+2024-06-20,RSL-0001,RSL,RSL-0002,RSL,5000.00,EUR,Investment transfer`
 	};
 
 	function downloadCsv(filename: string, content: string) {
@@ -179,7 +144,7 @@ RSL,USD,EUR,0.92,2024-06-15`
 		>
 	</p>
 	<p class="text-surface-500 text-sm mb-8">
-		Use plain business-friendly column names. The app maps them to OBP API calls automatically.
+		CSV column names match OBP API field names.
 		Download templates or examples below for each data type.
 	</p>
 
@@ -198,9 +163,7 @@ RSL,USD,EUR,0.92,2024-06-15`
 		<input type="hidden" name="banks_csv" value={banksCsv} />
 		<input type="hidden" name="accounts_csv" value={accountsCsv} />
 		<input type="hidden" name="customers_csv" value={customersCsv} />
-		<input type="hidden" name="counterparties_csv" value={counterpartiesCsv} />
 		<input type="hidden" name="transactions_csv" value={transactionsCsv} />
-		<input type="hidden" name="fx_rates_csv" value={fxRatesCsv} />
 
 		<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 			<!-- Left column: Upload -->
@@ -211,7 +174,7 @@ RSL,USD,EUR,0.92,2024-06-15`
 					'Banks',
 					Building,
 					banksCount,
-					'name, short_code, website, logo_url',
+					'full_name, bank_code',
 					(v) => (banksCsv = v)
 				)}
 
@@ -221,7 +184,7 @@ RSL,USD,EUR,0.92,2024-06-15`
 					'Accounts',
 					Wallet,
 					accountsCount,
-					'bank, account_name, currency, opening_balance, account_holder',
+					'bank_code, number, currency, legal_name',
 					(v) => (accountsCsv = v)
 				)}
 
@@ -231,18 +194,8 @@ RSL,USD,EUR,0.92,2024-06-15`
 					'Customers',
 					Users,
 					customersCount,
-					'name, type, phone, email, date_of_birth, title, bank',
+					'legal_name, customer_type, mobile_phone_number, email, date_of_birth, title, bank_code',
 					(v) => (customersCsv = v)
-				)}
-
-				<!-- Counterparties CSV -->
-				{@render csvUploadSection(
-					'counterparties',
-					'Counterparties',
-					ArrowRightLeft,
-					counterpartiesCount,
-					'business_name, description, category, bank, account',
-					(v) => (counterpartiesCsv = v)
 				)}
 
 				<!-- Transactions CSV -->
@@ -251,18 +204,8 @@ RSL,USD,EUR,0.92,2024-06-15`
 					'Transactions',
 					TrendingUp,
 					transactionsCount,
-					'date, from_account, from_bank, to_account, to_bank, amount, currency',
+					'date, from_account_number, from_bank_code, to_account_number, to_bank_code, amount, currency',
 					(v) => (transactionsCsv = v)
-				)}
-
-				<!-- FX Rates CSV -->
-				{@render csvUploadSection(
-					'fx_rates',
-					'FX Rates',
-					Link,
-					fxRatesCount,
-					'bank, from_currency, to_currency, rate, date',
-					(v) => (fxRatesCsv = v)
 				)}
 
 				<!-- Submit -->
@@ -295,28 +238,21 @@ RSL,USD,EUR,0.92,2024-06-15`
 						{/if}
 
 						{#if form.results.accounts.length > 0}
-							{@render resultSection('Accounts', form.results.accounts, (a) => `${a.label} at ${a.bank} - ${a.status}`)}
+							{@render resultSection('Accounts', form.results.accounts, (a) => `${a.number} at ${a.bank_code} - ${a.status}`)}
 						{/if}
 
 						{#if form.results.customers.length > 0}
-							{@render resultSection('Customers', form.results.customers, (c) => `${c.name} (${c.type}) - ${c.status}`)}
+							{@render resultSection('Customers', form.results.customers, (c) => `${c.legal_name} (${c.customer_type}) - ${c.status}`)}
 						{/if}
 
 						{#if form.results.customerAccountLinks.length > 0}
-							{@render resultSection('Customer-Account Links', form.results.customerAccountLinks, (l) => `${l.customer} -> ${l.account} - ${l.status}`)}
-						{/if}
-
-						{#if form.results.counterparties.length > 0}
-							{@render resultSection('Counterparties', form.results.counterparties, (c) => `${c.name} at ${c.bank}/${c.account} - ${c.status}`)}
+							{@render resultSection('Customer-Account Links', form.results.customerAccountLinks, (l) => `${l.legal_name} -> ${l.number} - ${l.status}`)}
 						{/if}
 
 						{#if form.results.transactions.length > 0}
 							{@render resultSection('Transactions', form.results.transactions, (t) => `${t.from} -> ${t.to}: ${t.amount} - ${t.status}`)}
 						{/if}
 
-						{#if form.results.fxRates.length > 0}
-							{@render resultSection('FX Rates', form.results.fxRates, (f) => `${f.from} -> ${f.to}: ${f.rate} - ${f.status}`)}
-						{/if}
 					</div>
 
 					{#if form.results.errors.length > 0}
@@ -340,39 +276,56 @@ RSL,USD,EUR,0.92,2024-06-15`
 						</h2>
 						<ol class="space-y-3 text-sm text-surface-300">
 							<li>
-								<strong class="text-surface-50">1. Download templates</strong> - Click the
-								download button on each section to get a CSV template with the expected columns.
+								<strong class="text-surface-50">1. Download templates or examples</strong> - Each
+								section has a Template (empty with column headers) and an Example (with realistic
+								data you can import right away to test the process).
 							</li>
 							<li>
 								<strong class="text-surface-50">2. Fill in your data</strong> - Use plain
-								business names. For example, use a bank's short code (like "FNB") and reference
-								it in accounts and customers.
+								business names. For example, give each bank a short code (like "FNB") and
+								reference that code in the other CSV files.
 							</li>
 							<li>
 								<strong class="text-surface-50">3. Upload CSVs</strong> - Upload one or more
-								CSV files. You don't need all of them - just upload what you have.
+								CSV files. You don't need all of them — just upload what you have.
 							</li>
 							<li>
 								<strong class="text-surface-50">4. Import</strong> - The app processes files in
-								order: Banks, Accounts, Customers, Customer-Account Links,
-								Counterparties, Transactions, FX Rates.
+								dependency order: Banks, Accounts, Customers, Transactions. Customer-account
+								links are created automatically.
 							</li>
 						</ol>
 
-						<h3 class="h4 mt-6 mb-3">Cross-references</h3>
-						<ul class="space-y-2 text-sm text-surface-300">
+						<h3 class="h4 mt-6 mb-3">How files link together</h3>
+						<ul class="space-y-3 text-sm text-surface-300">
 							<li>
-								<code class="bg-surface-700 px-1 rounded">bank</code> in accounts.csv must match
-								<code class="bg-surface-700 px-1 rounded">short_code</code> in banks.csv
+								<strong class="text-surface-50">Banks → Accounts:</strong>
+								The <code class="bg-surface-700 px-1 rounded">bank_code</code> column in accounts.csv
+								must match a <code class="bg-surface-700 px-1 rounded">bank_code</code> from banks.csv.
+								This tells the app which bank the account belongs to.
 							</li>
 							<li>
-								<code class="bg-surface-700 px-1 rounded">account_holder</code> in accounts.csv must
-								match <code class="bg-surface-700 px-1 rounded">name</code> in customers.csv (auto-links
-								the customer to the account)
+								<strong class="text-surface-50">Banks → Customers:</strong>
+								The <code class="bg-surface-700 px-1 rounded">bank_code</code> column in customers.csv
+								must match a <code class="bg-surface-700 px-1 rounded">bank_code</code> from banks.csv.
+								Each customer is created at the specified bank.
 							</li>
 							<li>
-								<code class="bg-surface-700 px-1 rounded">account</code> in counterparties.csv must
-								match <code class="bg-surface-700 px-1 rounded">account_name</code> in accounts.csv
+								<strong class="text-surface-50">Customers → Accounts (automatic linking):</strong>
+								The <code class="bg-surface-700 px-1 rounded">legal_name</code> column in accounts.csv
+								must match a <code class="bg-surface-700 px-1 rounded">legal_name</code> from customers.csv
+								at the same bank. When both match, the app automatically creates a Customer Account Link
+								with relationship_type "Owner" — no extra file needed.
+							</li>
+							<li>
+								<strong class="text-surface-50">Accounts → Transactions:</strong>
+								The <code class="bg-surface-700 px-1 rounded">from_account_number</code> and
+								<code class="bg-surface-700 px-1 rounded">to_account_number</code> columns in transactions.csv
+								must match <code class="bg-surface-700 px-1 rounded">number</code> values from
+								accounts.csv. The <code class="bg-surface-700 px-1 rounded">from_bank_code</code> and
+								<code class="bg-surface-700 px-1 rounded">to_bank_code</code> columns must match
+								<code class="bg-surface-700 px-1 rounded">bank_code</code> values from banks.csv.
+								Both accounts must be at the same bank.
 							</li>
 						</ul>
 					</div>

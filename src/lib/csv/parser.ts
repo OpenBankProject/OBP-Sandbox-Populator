@@ -1,68 +1,46 @@
 /**
- * CSV parser and mapper for business-friendly CSV files.
+ * CSV parser for OBP sandbox data import.
  *
- * Parses CSV text into typed arrays and maps business-friendly column names
- * to OBP API payload structures.
+ * CSV column names match OBP API v6.0.0 JSON field names.
  */
 
-// ─── Raw parsed row types (business-friendly column names) ─────────────────
+// ─── Row types (field names match OBP API JSON) ────────────────────────────
 
 export interface CsvBankRow {
-	name: string;
-	short_code: string;
-	website?: string;
-	logo_url?: string;
+	full_name: string;
+	bank_code: string;
 }
 
 export interface CsvAccountRow {
-	bank: string;
-	account_name: string;
+	bank_code: string;
+	number: string;
 	currency: string;
-	opening_balance?: string;
-	account_holder?: string;
+	legal_name?: string; // references a customer's legal_name for auto-linking
 }
 
 export interface CsvCustomerRow {
-	name: string;
-	type: string; // 'individual' or 'corporate'
-	phone: string;
+	legal_name: string;
+	customer_type: string; // 'individual' or 'corporate'
+	mobile_phone_number: string;
 	email?: string;
 	date_of_birth?: string;
 	title?: string;
 	employment_status?: string;
-	education?: string;
+	highest_education_attained?: string;
 	relationship_status?: string;
 	category?: string; // for corporate
-	bank: string;
-}
-
-export interface CsvCounterpartyRow {
-	business_name: string;
-	description?: string;
-	category?: string;
-	location?: string;
-	currency?: string;
-	bank: string;
-	account: string;
+	bank_code: string;
 }
 
 export interface CsvTransactionRow {
 	date: string;
-	from_account: string;
-	from_bank: string;
-	to_account: string;
-	to_bank: string;
+	from_account_number: string;
+	from_bank_code: string;
+	to_account_number: string;
+	to_bank_code: string;
 	amount: string;
 	currency: string;
 	description?: string;
-}
-
-export interface CsvFxRateRow {
-	bank: string;
-	from_currency: string;
-	to_currency: string;
-	rate: string;
-	date?: string;
 }
 
 // ─── Parsed CSV result with validation ─────────────────────────────────────
@@ -137,15 +115,13 @@ export function parseBanksCsv(text: string): CsvParseResult<CsvBankRow> {
 
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i];
-		const lineNum = i + 2; // +2 for 1-based + header row
-		if (!row.name) errors.push(`Row ${lineNum}: missing 'name'`);
-		if (!row.short_code) errors.push(`Row ${lineNum}: missing 'short_code'`);
-		if (row.name && row.short_code) {
+		const lineNum = i + 2;
+		if (!row.full_name) errors.push(`Row ${lineNum}: missing 'full_name'`);
+		if (!row.bank_code) errors.push(`Row ${lineNum}: missing 'bank_code'`);
+		if (row.full_name && row.bank_code) {
 			parsed.push({
-				name: row.name,
-				short_code: row.short_code,
-				website: row.website || undefined,
-				logo_url: row.logo_url || undefined
+				full_name: row.full_name,
+				bank_code: row.bank_code
 			});
 		}
 	}
@@ -161,16 +137,15 @@ export function parseAccountsCsv(text: string): CsvParseResult<CsvAccountRow> {
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i];
 		const lineNum = i + 2;
-		if (!row.bank) errors.push(`Row ${lineNum}: missing 'bank'`);
-		if (!row.account_name) errors.push(`Row ${lineNum}: missing 'account_name'`);
+		if (!row.bank_code) errors.push(`Row ${lineNum}: missing 'bank_code'`);
+		if (!row.number) errors.push(`Row ${lineNum}: missing 'number'`);
 		if (!row.currency) errors.push(`Row ${lineNum}: missing 'currency'`);
-		if (row.bank && row.account_name && row.currency) {
+		if (row.bank_code && row.number && row.currency) {
 			parsed.push({
-				bank: row.bank,
-				account_name: row.account_name,
+				bank_code: row.bank_code,
+				number: row.number,
 				currency: row.currency,
-				opening_balance: row.opening_balance || '0',
-				account_holder: row.account_holder || undefined
+				legal_name: row.legal_name || undefined
 			});
 		}
 	}
@@ -186,53 +161,26 @@ export function parseCustomersCsv(text: string): CsvParseResult<CsvCustomerRow> 
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i];
 		const lineNum = i + 2;
-		if (!row.name) errors.push(`Row ${lineNum}: missing 'name'`);
-		if (!row.type) errors.push(`Row ${lineNum}: missing 'type'`);
-		if (!row.phone) errors.push(`Row ${lineNum}: missing 'phone'`);
-		if (!row.bank) errors.push(`Row ${lineNum}: missing 'bank'`);
-		if (row.type && !['individual', 'corporate'].includes(row.type.toLowerCase())) {
-			errors.push(`Row ${lineNum}: 'type' must be 'individual' or 'corporate'`);
+		if (!row.legal_name) errors.push(`Row ${lineNum}: missing 'legal_name'`);
+		if (!row.customer_type) errors.push(`Row ${lineNum}: missing 'customer_type'`);
+		if (!row.mobile_phone_number) errors.push(`Row ${lineNum}: missing 'mobile_phone_number'`);
+		if (!row.bank_code) errors.push(`Row ${lineNum}: missing 'bank_code'`);
+		if (row.customer_type && !['individual', 'corporate'].includes(row.customer_type.toLowerCase())) {
+			errors.push(`Row ${lineNum}: 'customer_type' must be 'individual' or 'corporate'`);
 		}
-		if (row.name && row.type && row.phone && row.bank) {
+		if (row.legal_name && row.customer_type && row.mobile_phone_number && row.bank_code) {
 			parsed.push({
-				name: row.name,
-				type: row.type.toLowerCase(),
-				phone: row.phone,
+				legal_name: row.legal_name,
+				customer_type: row.customer_type.toLowerCase(),
+				mobile_phone_number: row.mobile_phone_number,
 				email: row.email || undefined,
 				date_of_birth: row.date_of_birth || undefined,
 				title: row.title || undefined,
 				employment_status: row.employment_status || undefined,
-				education: row.education || undefined,
+				highest_education_attained: row.highest_education_attained || undefined,
 				relationship_status: row.relationship_status || undefined,
 				category: row.category || undefined,
-				bank: row.bank
-			});
-		}
-	}
-
-	return { rows: parsed, errors, headers };
-}
-
-export function parseCounterpartiesCsv(text: string): CsvParseResult<CsvCounterpartyRow> {
-	const { headers, rows } = parseCsvText(text);
-	const errors: string[] = [];
-	const parsed: CsvCounterpartyRow[] = [];
-
-	for (let i = 0; i < rows.length; i++) {
-		const row = rows[i];
-		const lineNum = i + 2;
-		if (!row.business_name) errors.push(`Row ${lineNum}: missing 'business_name'`);
-		if (!row.bank) errors.push(`Row ${lineNum}: missing 'bank'`);
-		if (!row.account) errors.push(`Row ${lineNum}: missing 'account'`);
-		if (row.business_name && row.bank && row.account) {
-			parsed.push({
-				business_name: row.business_name,
-				description: row.description || undefined,
-				category: row.category || undefined,
-				location: row.location || undefined,
-				currency: row.currency || undefined,
-				bank: row.bank,
-				account: row.account
+				bank_code: row.bank_code
 			});
 		}
 	}
@@ -249,54 +197,25 @@ export function parseTransactionsCsv(text: string): CsvParseResult<CsvTransactio
 		const row = rows[i];
 		const lineNum = i + 2;
 		if (!row.date) errors.push(`Row ${lineNum}: missing 'date'`);
-		if (!row.from_account) errors.push(`Row ${lineNum}: missing 'from_account'`);
-		if (!row.from_bank) errors.push(`Row ${lineNum}: missing 'from_bank'`);
-		if (!row.to_account) errors.push(`Row ${lineNum}: missing 'to_account'`);
-		if (!row.to_bank) errors.push(`Row ${lineNum}: missing 'to_bank'`);
+		if (!row.from_account_number) errors.push(`Row ${lineNum}: missing 'from_account_number'`);
+		if (!row.from_bank_code) errors.push(`Row ${lineNum}: missing 'from_bank_code'`);
+		if (!row.to_account_number) errors.push(`Row ${lineNum}: missing 'to_account_number'`);
+		if (!row.to_bank_code) errors.push(`Row ${lineNum}: missing 'to_bank_code'`);
 		if (!row.amount) errors.push(`Row ${lineNum}: missing 'amount'`);
 		if (!row.currency) errors.push(`Row ${lineNum}: missing 'currency'`);
 		if (row.amount && isNaN(parseFloat(row.amount))) {
 			errors.push(`Row ${lineNum}: 'amount' must be a number`);
 		}
-		if (row.date && row.from_account && row.from_bank && row.to_account && row.to_bank && row.amount && row.currency) {
+		if (row.date && row.from_account_number && row.from_bank_code && row.to_account_number && row.to_bank_code && row.amount && row.currency) {
 			parsed.push({
 				date: row.date,
-				from_account: row.from_account,
-				from_bank: row.from_bank,
-				to_account: row.to_account,
-				to_bank: row.to_bank,
+				from_account_number: row.from_account_number,
+				from_bank_code: row.from_bank_code,
+				to_account_number: row.to_account_number,
+				to_bank_code: row.to_bank_code,
 				amount: row.amount,
 				currency: row.currency,
 				description: row.description || undefined
-			});
-		}
-	}
-
-	return { rows: parsed, errors, headers };
-}
-
-export function parseFxRatesCsv(text: string): CsvParseResult<CsvFxRateRow> {
-	const { headers, rows } = parseCsvText(text);
-	const errors: string[] = [];
-	const parsed: CsvFxRateRow[] = [];
-
-	for (let i = 0; i < rows.length; i++) {
-		const row = rows[i];
-		const lineNum = i + 2;
-		if (!row.bank) errors.push(`Row ${lineNum}: missing 'bank'`);
-		if (!row.from_currency) errors.push(`Row ${lineNum}: missing 'from_currency'`);
-		if (!row.to_currency) errors.push(`Row ${lineNum}: missing 'to_currency'`);
-		if (!row.rate) errors.push(`Row ${lineNum}: missing 'rate'`);
-		if (row.rate && isNaN(parseFloat(row.rate))) {
-			errors.push(`Row ${lineNum}: 'rate' must be a number`);
-		}
-		if (row.bank && row.from_currency && row.to_currency && row.rate) {
-			parsed.push({
-				bank: row.bank,
-				from_currency: row.from_currency,
-				to_currency: row.to_currency,
-				rate: row.rate,
-				date: row.date || undefined
 			});
 		}
 	}

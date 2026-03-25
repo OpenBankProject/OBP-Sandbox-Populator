@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Database, ExternalLink } from '@lucide/svelte';
+	import { Database, FileSpreadsheet, ExternalLink } from '@lucide/svelte';
 	import type { RootLayoutData } from './+layout.server';
 	import { deriveLabel, deriveCamelName } from '$lib/obp/appDirectory';
 
@@ -28,10 +28,16 @@
 		</p>
 
 		{#if isAuthenticated}
-			<a href="/populate" class="btn preset-filled-primary-500 text-lg px-8 py-3">
-				<Database class="size-5 mr-2" />
-				Populate
-			</a>
+			<div class="flex flex-wrap justify-center gap-4">
+				<a href="/populate" class="btn preset-filled-primary-500 text-lg px-8 py-3">
+					<Database class="size-5 mr-2" />
+					Populate
+				</a>
+				<a href="/populate/csv" class="btn preset-filled-secondary-500 text-lg px-8 py-3">
+					<FileSpreadsheet class="size-5 mr-2" />
+					Populate from CSV
+				</a>
+			</div>
 		{:else}
 			<div class="space-y-4">
 				<p class="text-surface-400">Please log in to start populating your sandbox.</p>
