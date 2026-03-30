@@ -85,7 +85,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		try {
 			// Find banks matching user's prefix pattern
 			const banksResponse = await client.getBanks();
-			const userBanks = banksResponse.banks.filter(b => b.bank_id.startsWith(bankIdPrefix + '.'));
+			const userBanks = banksResponse.banks.filter(b => b.bank_id.startsWith(bankIdPrefix + '-'));
 
 			for (const bank of userBanks) {
 				existing.banks.push({
@@ -314,6 +314,7 @@ export const actions: Actions = {
 		const createUsers = formData.get('createUsers') === 'on';
 		const numUsers = parseInt(formData.get('numUsers') as string) || 3;
 		const createUserCustomerLinks = formData.get('createUserCustomerLinks') === 'on';
+		const createCustomerLinks = formData.get('createCustomerLinks') === 'on';
 
 		const results: {
 			banks: Array<{ bank_id: string; bank_code: string; full_name: string; existed: boolean }>;
@@ -324,6 +325,7 @@ export const actions: Actions = {
 			transactions: Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string; existed: boolean }>;
 			users: Array<{ user_id: string; username: string; email: string; existed: boolean }>;
 			userCustomerLinks: Array<{ username: string; legal_name: string; bank_id: string; existed: boolean }>;
+			customerLinks: Array<{ customer_name: string; other_customer_name: string; relationship_to: string; bank_id: string; existed: boolean }>;
 			errors: string[];
 		} = {
 			banks: [],
@@ -334,6 +336,7 @@ export const actions: Actions = {
 			transactions: [],
 			users: [],
 			userCustomerLinks: [],
+			customerLinks: [],
 			errors: []
 		};
 
@@ -341,12 +344,11 @@ export const actions: Actions = {
 			// Create Banks
 			logger.info(`Creating ${numBanks} banks...`);
 			for (let i = 1; i <= numBanks; i++) {
-				const bankId = `${bankIdPrefix}.bnk.${i}`;
+				const bankId = `${bankIdPrefix}-bnk-${i}`;
 				const bankName = `${effectiveUser.username} Test Bank ${i}`;
 
 				const bank_code = `${bankIdPrefix}${i}${countryCode}`;
 				try {
-					// Check if bank exists
 					const exists = await client.bankExists(bankId);
 					if (exists) {
 						logger.info(`Bank ${bankId} already exists, skipping`);
@@ -358,26 +360,17 @@ export const actions: Actions = {
 							bank_code: bank_code
 						});
 						logger.debug('Bank creation response:', JSON.stringify(bank));
-
-						// Grant entitlements at new bank
-						for (const role of ['CanCreateAccount', 'CanCreateHistoricalTransactionAtBank', 'CanCreateCustomer', 'CanGetCustomersAtOneBank', 'CanCreateUserCustomerLink', 'CanGetUserCustomerLink']) {
-							try {
-								await client.createEntitlement(effectiveUser.user_id, bank.bank_id, role);
-								logger.info(`Granted ${role} at ${bank.bank_id}`);
-							} catch (entErr: any) {
-								const errorMsg = `Could not grant ${role} at ${bank.bank_id}: ${entErr.message}`;
-							logger.warn(errorMsg);
-							results.errors.push(errorMsg);
-							}
-						}
-
-						results.banks.push({
-							bank_id: bank.bank_id,
-							bank_code: bank.bank_code,
-							full_name: bank.full_name,
-							existed: false
-						});
+						results.banks.push({ bank_id: bank.bank_id, bank_code: bank.bank_code, full_name: bank.full_name, existed: false });
 						logger.info(`Created bank: ${bank.bank_id}`);
+					}
+					// Always ensure entitlements (needed even on re-run)
+					for (const role of ['CanCreateAccount', 'CanCreateHistoricalTransactionAtBank', 'CanCreateCustomer', 'CanGetCustomersAtOneBank', 'CanCreateUserCustomerLink', 'CanGetUserCustomerLink', 'CanCreateCustomerLink']) {
+						try {
+							await client.createEntitlement(effectiveUser.user_id, bankId, role);
+							logger.info(`Granted ${role} at ${bankId}`);
+						} catch (entErr: any) {
+							logger.warn(`Could not grant ${role} at ${bankId}: ${entErr.message}`);
+						}
 					}
 				} catch (e: any) {
 					const errorMsg = `Failed to create bank ${bankId}: ${e.message}`;
@@ -694,6 +687,45 @@ export const actions: Actions = {
 				logger.info(`Created ${results.customers.length} customers`);
 			}
 
+			// Create Customer Links (customer-to-customer relationships)
+			if (createCustomerLinks && results.customers.length >= 2 && results.banks.length > 0) {
+				logger.info('Creating customer links...');
+				const firstBank = results.banks[0];
+				const individualCustomers = results.customers.filter(c => c.customer_type === 'INDIVIDUAL');
+
+				// Define relationship pairs: link pairs of individual customers with various relationship types
+				const relationshipTypes = ['spouse', 'parent', 'close_associate', 'sibling', 'business_partner'];
+
+				for (let i = 0; i < individualCustomers.length - 1; i++) {
+					const cust1 = individualCustomers[i];
+					const cust2 = individualCustomers[i + 1];
+					const relationship = relationshipTypes[i % relationshipTypes.length];
+
+					try {
+						await client.createCustomerLink(firstBank.bank_id, {
+							customer_id: cust1.customer_id,
+							other_bank_id: firstBank.bank_id,
+							other_customer_id: cust2.customer_id,
+							relationship_to: relationship
+						});
+						results.customerLinks.push({
+							customer_name: cust1.legal_name,
+							other_customer_name: cust2.legal_name,
+							relationship_to: relationship,
+							bank_id: firstBank.bank_id,
+							existed: false
+						});
+						logger.info(`Created customer link: ${cust1.legal_name} → ${cust2.legal_name} (${relationship})`);
+					} catch (e: any) {
+						const errorMsg = `Customer link ${cust1.legal_name} → ${cust2.legal_name}: ${e.message}`;
+						logger.error(errorMsg);
+						results.errors.push(errorMsg);
+					}
+					await delay(100);
+				}
+				logger.info(`Created ${results.customerLinks.filter(l => !l.existed).length} customer links`);
+			}
+
 			// Create FX Rates
 			if (createFxRates && results.banks.length > 0) {
 				logger.info('Creating FX rates...');
@@ -887,15 +919,9 @@ export const actions: Actions = {
 						});
 						logger.info(`Created user: ${username}`);
 					} catch (e: any) {
-						const msg: string = e.message || '';
-						if (msg.includes('already') || msg.includes('exists') || msg.includes('OBP-30010')) {
-							results.users.push({ user_id: '', username, email, existed: true });
-							logger.info(`User ${username} already exists, skipping`);
-						} else {
-							const errorMsg = `Failed to create user ${username}: ${msg}`;
-							logger.error(errorMsg);
-							results.errors.push(errorMsg);
-						}
+						const errorMsg = `Failed to create user ${username}: ${e.message}`;
+						logger.error(errorMsg);
+						results.errors.push(errorMsg);
 					}
 					await delay(100);
 				}
@@ -971,10 +997,11 @@ export const actions: Actions = {
 		const withUsers = formData.get('createUsers') === 'on';
 		const numUsers = parseInt(formData.get('numUsers') as string) || 3;
 		const withUserCustomerLinks = formData.get('createUserCustomerLinks') === 'on';
+		const withCustomerLinks = formData.get('createCustomerLinks') === 'on';
 
 		// Banks
 		const banks = Array.from({ length: numBanks }, (_, i) => ({
-			bank_id: `${bankIdPrefix}.bnk.${i + 1}`,
+			bank_id: `${bankIdPrefix}-bnk-${i + 1}`,
 			full_name: `${user.username} Test Bank ${i + 1}`,
 			bank_code: `${bankIdPrefix}${i + 1}${countryCode}`
 		}));
@@ -1038,6 +1065,16 @@ export const actions: Actions = {
 			}))
 			: [];
 
+		// Customer Links preview
+		const relationshipTypes = ['spouse', 'parent', 'close_associate', 'sibling', 'business_partner'];
+		const customerLinks = withCustomerLinks && withCustomers && individualCustomersPreview.length >= 2
+			? individualCustomersPreview.slice(0, -1).map((c, i) => ({
+				customer_name: c.legal_name,
+				other_customer_name: individualCustomersPreview[i + 1]?.legal_name ?? '',
+				relationship_to: relationshipTypes[i % relationshipTypes.length]
+			}))
+			: [];
+
 		const totalEntities =
 			banks.length +
 			accounts.length +
@@ -1046,7 +1083,8 @@ export const actions: Actions = {
 			fxRatePairs.length +
 			transactionCount +
 			users.length +
-			userCustomerLinks.length;
+			userCustomerLinks.length +
+			customerLinks.length;
 
 		return {
 			preview: {
@@ -1060,6 +1098,7 @@ export const actions: Actions = {
 					: null,
 				users,
 				userCustomerLinks,
+				customerLinks,
 				summary: {
 					banks: banks.length,
 					accounts: accounts.length,
@@ -1069,6 +1108,7 @@ export const actions: Actions = {
 					transactions: transactionCount,
 					users: users.length,
 					userCustomerLinks: userCustomerLinks.length,
+					customerLinks: customerLinks.length,
 					total: totalEntities
 				}
 			}
@@ -1098,7 +1138,7 @@ export const actions: Actions = {
 		try {
 			// Find user's banks
 			const banksResponse = await client.getBanks();
-			const userBanks = banksResponse.banks.filter(b => b.bank_id.startsWith(bankIdPrefix + '.'));
+			const userBanks = banksResponse.banks.filter(b => b.bank_id.startsWith(bankIdPrefix + '-'));
 
 			if (userBanks.length === 0) {
 				return fail(400, { error: 'No banks found. Please populate first.', results });
@@ -1195,7 +1235,7 @@ export const actions: Actions = {
 		try {
 			// Find user's banks
 			const banksResponse = await client.getBanks();
-			const userBanks = banksResponse.banks.filter(b => b.bank_id.startsWith(bankIdPrefix + '.'));
+			const userBanks = banksResponse.banks.filter(b => b.bank_id.startsWith(bankIdPrefix + '-'));
 
 			if (userBanks.length === 0) {
 				return fail(400, { error: 'No banks found. Please populate first.', results });
@@ -1257,6 +1297,400 @@ export const actions: Actions = {
 		} catch (e: any) {
 			logger.error('Failed to create account transaction requests:', e);
 			return fail(500, { error: e.message, results });
+		}
+	},
+
+	populateInvestigationCase: async ({ request, locals }) => {
+		const session = locals.session;
+		const accessToken = session?.data?.oauth?.access_token;
+		const user = session?.data?.user;
+
+		if (!accessToken || !user) {
+			return fail(401, { error: 'Not authenticated' });
+		}
+
+		const formData = await request.formData();
+		const casePrefix = (formData.get('casePrefix') as string) || getUsernamePrefix(user.username);
+		const caseBankIdsRaw = (formData.get('caseBankIds') as string) || 'za-fnb-inv, za-std-inv, za-ndb-inv';
+		const caseBankIds = caseBankIdsRaw.split(',').map(s => s.trim()).filter(Boolean);
+		if (caseBankIds.length < 3) {
+			return fail(400, { error: 'Please provide at least 3 bank IDs (comma-separated).' });
+		}
+
+		const client = new OBPClient(env.PUBLIC_OBP_BASE_URL, 'v6.0.0', accessToken);
+
+		// Fetch current user fresh from OBP
+		let currentUser: typeof user;
+		try {
+			currentUser = await client.getCurrentUser();
+		} catch (e: any) {
+			logger.error('Failed to fetch current user from OBP:', e.message);
+			return fail(401, { error: `Your OBP user account could not be found. Please log out and log in again. (${e.message})` });
+		}
+		const effectiveUser = { ...user, user_id: currentUser.user_id };
+
+		const results: {
+			banks: Array<{ bank_id: string; bank_code: string; full_name: string; existed: boolean }>;
+			accounts: Array<{ account_id: string; bank_id: string; label: string; currency: string; existed: boolean }>;
+			customers: Array<{ customer_id: string; legal_name: string; customer_type: string; bank_id: string; existed: boolean }>;
+			customerAccountLinks: Array<{ legal_name: string; account_label: string; existed: boolean }>;
+			customerLinks: Array<{ customer_name: string; other_customer_name: string; relationship_to: string; bank_id: string; existed: boolean }>;
+			transactions: Array<{ transaction_id: string; bank_id: string; from_account_id: string; to_account_id: string; amount: string; existed: boolean; description: string }>;
+			errors: string[];
+		} = {
+			banks: [],
+			accounts: [],
+			customers: [],
+			customerAccountLinks: [],
+			customerLinks: [],
+			transactions: [],
+			errors: []
+		};
+
+		// ── Bank definitions (prefixed with user-provided IDs) ──
+		const pfx = (id: string) => `${casePrefix}-${id}`;
+		// Bank 1 = normal layer, Bank 2 = suspicious layer, Bank 3 = expansion layer
+		const BANKS = caseBankIds.map((id, i) => ({
+			bank_id: pfx(id),
+			full_name: `Case Bank ${i + 1} (${id})`,
+			bank_code: `${casePrefix}${id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase()}`
+		}));
+
+		// ── Customer definitions ──
+		// bank1 = normal, bank2 = suspicious, bank3 = expansion
+		const bank1 = BANKS[0].bank_id;
+		const bank2 = BANKS[1].bank_id;
+		const bank3 = BANKS[2].bank_id;
+
+		// Individuals
+		const INDIVIDUALS = [
+			{ legal_name: 'Thabo Maseko', phone: '+27 82 555 0101', email: 'thabo.maseko@example.co.za', dob: '1984-06-15', title: 'Mr', employment: 'employed', education: 'Bachelor', relationship: 'married', banks: [bank1, bank2] },
+			{ legal_name: 'Lerato Maseko', phone: '+27 83 555 0102', email: 'lerato.maseko@example.co.za', dob: '1986-09-22', title: 'Mrs', employment: 'employed', education: 'Diploma', relationship: 'married', banks: [bank1] },
+			{ legal_name: 'Nomsa Dlamini', phone: '+27 84 555 0103', email: 'nomsa.dlamini@example.co.za', dob: '1990-02-10', title: 'Ms', employment: 'employed', education: 'Bachelor', relationship: 'single', banks: [bank1] },
+			{ legal_name: 'Karabo Molefe', phone: '+27 76 555 0104', email: 'karabo.molefe@example.co.za', dob: '1979-12-03', title: 'Mr', employment: 'self-employed', education: '', relationship: 'single', banks: [bank2] }
+		];
+		// Corporates
+		const CORPORATES = [
+			{ legal_name: 'Mzansi Engineering (Pty) Ltd', phone: '+27 11 555 0200', email: 'info@mzansi-eng.example.co.za', category: 'Engineering', banks: [bank1] },
+			{ legal_name: 'Blue Kite Consulting (Pty) Ltd', phone: '+27 11 555 0300', email: 'admin@bluekite.example.co.za', category: 'Consulting', banks: [bank2] },
+			{ legal_name: 'Ndlovu Holdings (Pty) Ltd', phone: '+27 11 555 0400', email: 'finance@ndlovu.example.co.za', category: 'Holdings', banks: [bank2, bank3] }
+		];
+
+		// ── Account definitions (bank_id → label → owner legal_name) ──
+		const ACCOUNTS: Array<{ bank_id: string; label: string; owner: string }> = [
+			// Bank 1 — normal layer
+			{ bank_id: bank1, label: 'Thabo Maseko - Salary Account', owner: 'Thabo Maseko' },
+			{ bank_id: bank1, label: 'Thabo Maseko - Savings Account', owner: 'Thabo Maseko' },
+			{ bank_id: bank1, label: 'Lerato Maseko - Personal Account', owner: 'Lerato Maseko' },
+			{ bank_id: bank1, label: 'Nomsa Dlamini - Personal Account', owner: 'Nomsa Dlamini' },
+			{ bank_id: bank1, label: 'Mzansi Engineering - Business Account', owner: 'Mzansi Engineering (Pty) Ltd' },
+			// Bank 2 — suspicious layer
+			{ bank_id: bank2, label: 'Thabo Maseko - Current Account', owner: 'Thabo Maseko' },
+			{ bank_id: bank2, label: 'Blue Kite Consulting - Business Account', owner: 'Blue Kite Consulting (Pty) Ltd' },
+			{ bank_id: bank2, label: 'Ndlovu Holdings - Business Account', owner: 'Ndlovu Holdings (Pty) Ltd' },
+			{ bank_id: bank2, label: 'Karabo Molefe - Vendor Account', owner: 'Karabo Molefe' },
+			// Bank 3 — expansion layer
+			{ bank_id: bank3, label: 'Ndlovu Holdings - Reserve Account', owner: 'Ndlovu Holdings (Pty) Ltd' }
+		];
+
+		// ── Transaction definitions (references account labels) ──
+		// from_label and to_label must match ACCOUNTS[].label at the same bank_id
+		const TRANSACTIONS: Array<{ date: string; bank_id: string; from_label: string; to_label: string; amount: string; description: string }> = [
+			// ── Normal layer: salary, savings, household (Bank 1) ──
+			{ date: '2024-06-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Thabo Maseko - Salary Account', amount: '45000.00', description: 'Salary - June 2024' },
+			{ date: '2024-06-26', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Thabo Maseko - Savings Account', amount: '5000.00', description: 'Monthly savings' },
+			{ date: '2024-06-27', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '3500.00', description: 'Household contribution' },
+			{ date: '2024-06-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Nomsa Dlamini - Personal Account', amount: '38000.00', description: 'Salary - June 2024' },
+			{ date: '2024-07-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Thabo Maseko - Salary Account', amount: '45000.00', description: 'Salary - July 2024' },
+			{ date: '2024-07-26', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Thabo Maseko - Savings Account', amount: '5000.00', description: 'Monthly savings' },
+			{ date: '2024-07-27', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '3500.00', description: 'Household contribution' },
+			{ date: '2024-07-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Nomsa Dlamini - Personal Account', amount: '38000.00', description: 'Salary - July 2024' },
+			{ date: '2024-08-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Thabo Maseko - Salary Account', amount: '45000.00', description: 'Salary - August 2024' },
+			{ date: '2024-08-26', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Thabo Maseko - Savings Account', amount: '5000.00', description: 'Monthly savings' },
+			{ date: '2024-08-27', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '3500.00', description: 'Household contribution' },
+
+			// ── Suspicious layer: Ndlovu → Blue Kite → Thabo (Bank 2) ──
+			{ date: '2024-06-20', bank_id: bank2, from_label: 'Ndlovu Holdings - Business Account', to_label: 'Blue Kite Consulting - Business Account', amount: '180000.00', description: 'Project Delivery Phase 2' },
+			{ date: '2024-06-22', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '75000.00', description: 'Consulting Fee - June' },
+			{ date: '2024-06-24', bank_id: bank2, from_label: 'Thabo Maseko - Current Account', to_label: 'Karabo Molefe - Vendor Account', amount: '12000.00', description: 'Payment - Ref TRX8842' },
+
+			// Lerato receives transfer shortly after Blue Kite payment
+			{ date: '2024-06-25', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '15000.00', description: 'Transfer' },
+
+			{ date: '2024-07-18', bank_id: bank2, from_label: 'Ndlovu Holdings - Business Account', to_label: 'Blue Kite Consulting - Business Account', amount: '95000.00', description: 'Advisory Services Q3' },
+			{ date: '2024-07-20', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '55000.00', description: 'Consulting Fee - July' },
+			// Lerato again shortly after
+			{ date: '2024-07-22', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '22000.00', description: 'Transfer' },
+
+			{ date: '2024-08-10', bank_id: bank2, from_label: 'Ndlovu Holdings - Business Account', to_label: 'Blue Kite Consulting - Business Account', amount: '67000.00', description: 'Invoice 2024-0891' },
+			{ date: '2024-08-12', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '120000.00', description: 'Professional Services' },
+			// Large vehicle purchase inconsistent with salary
+			{ date: '2024-08-14', bank_id: bank2, from_label: 'Thabo Maseko - Current Account', to_label: 'Karabo Molefe - Vendor Account', amount: '85000.00', description: 'Vehicle Deposit - BMW' },
+			// Lerato again
+			{ date: '2024-08-15', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '18000.00', description: 'Transfer' },
+
+			// Blurred / generic reference
+			{ date: '2024-08-20', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '43500.00', description: 'Payment - Ref TRX9103' },
+
+			// ── Investigative expansion: Karabo becomes recurring, new patterns ──
+			{ date: '2024-09-02', bank_id: bank2, from_label: 'Karabo Molefe - Vendor Account', to_label: 'Thabo Maseko - Current Account', amount: '18500.00', description: 'Commission Payment' },
+			{ date: '2024-09-05', bank_id: bank2, from_label: 'Karabo Molefe - Vendor Account', to_label: 'Blue Kite Consulting - Business Account', amount: '32000.00', description: 'Service Agreement' },
+			{ date: '2024-09-10', bank_id: bank2, from_label: 'Ndlovu Holdings - Business Account', to_label: 'Blue Kite Consulting - Business Account', amount: '145000.00', description: 'Procurement Facilitation' },
+			{ date: '2024-09-12', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '88000.00', description: 'Consulting Fee - September' },
+			{ date: '2024-09-14', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '25000.00', description: 'Transfer' },
+			// Bank 3 expansion — Ndlovu moving money across banks
+			{ date: '2024-09-18', bank_id: bank3, from_label: 'Ndlovu Holdings - Reserve Account', to_label: 'Ndlovu Holdings - Reserve Account', amount: '250000.00', description: 'Reserve Rebalance' }
+		];
+
+		const CURRENCY = 'ZAR';
+		const ENTITLEMENTS = [
+			'CanCreateAccount', 'CanCreateHistoricalTransactionAtBank',
+			'CanCreateCustomer', 'CanGetCustomersAtOneBank',
+			'CanCreateUserCustomerLink', 'CanGetUserCustomerLink',
+			'CanCreateCustomerAccountLink', 'CanCreateCustomerLink'
+		];
+
+		try {
+			// ── Step 1: Create Banks ──
+			logger.info('Investigation case: Creating banks...');
+			for (const bankDef of BANKS) {
+				try {
+					const exists = await client.bankExists(bankDef.bank_id);
+					if (exists) {
+						results.banks.push({ ...bankDef, existed: true });
+					} else {
+						const bank = await client.createBank({ bank_id: bankDef.bank_id, full_name: bankDef.full_name, bank_code: bankDef.bank_code });
+						results.banks.push({ bank_id: bank.bank_id, bank_code: bank.bank_code, full_name: bank.full_name, existed: false });
+					}
+					for (const role of ENTITLEMENTS) {
+						try { await client.createEntitlement(effectiveUser.user_id, bankDef.bank_id, role); } catch { /* ignore */ }
+					}
+				} catch (e: any) {
+					results.errors.push(`Bank ${bankDef.bank_id}: ${e.message}`);
+				}
+				await delay(100);
+			}
+
+			// ── Step 2: Create Accounts ──
+			logger.info('Investigation case: Creating accounts...');
+			// accountMap: bank_id+label → account_id (needed for transactions)
+			const accountMap: Record<string, string> = {};
+			for (const accDef of ACCOUNTS) {
+				try {
+					// Check existing
+					let existingAccounts: Array<{ account_id: string; label?: string; currency?: string }> = [];
+					try {
+						const resp = await client.getAccountsAtBank(accDef.bank_id);
+						existingAccounts = resp.accounts || [];
+					} catch { /* ignore */ }
+
+					const existing = existingAccounts.find(a => a.label === accDef.label);
+					if (existing) {
+						accountMap[`${accDef.bank_id}::${accDef.label}`] = existing.account_id;
+						results.accounts.push({ account_id: existing.account_id, bank_id: accDef.bank_id, label: accDef.label, currency: CURRENCY, existed: true });
+					} else {
+						const account = await client.createAccount(accDef.bank_id, {
+							label: accDef.label,
+							currency: CURRENCY,
+							balance: { amount: '0', currency: CURRENCY },
+							user_id: effectiveUser.user_id
+						});
+						accountMap[`${accDef.bank_id}::${accDef.label}`] = account.account_id;
+						results.accounts.push({ account_id: account.account_id, bank_id: accDef.bank_id, label: accDef.label, currency: CURRENCY, existed: false });
+						logger.info(`Created account: ${accDef.label} at ${accDef.bank_id}`);
+					}
+				} catch (e: any) {
+					results.errors.push(`Account "${accDef.label}" at ${accDef.bank_id}: ${e.message}`);
+				}
+				await delay(100);
+			}
+
+			// ── Step 3: Create Customers ──
+			logger.info('Investigation case: Creating customers...');
+			// customerMap: bank_id+legal_name → customer_id (needed for account links)
+			const customerMap: Record<string, string> = {};
+
+			for (const ind of INDIVIDUALS) {
+				for (const bankId of ind.banks) {
+					try {
+						let existingCustomers: Array<{ customer_id: string; legal_name: string }> = [];
+						try {
+							const resp = await client.getCustomersAtBank(bankId);
+							existingCustomers = resp.customers || [];
+						} catch { /* ignore */ }
+
+						const existing = existingCustomers.find(c => c.legal_name === ind.legal_name);
+						if (existing) {
+							customerMap[`${bankId}::${ind.legal_name}`] = existing.customer_id;
+							results.customers.push({ customer_id: existing.customer_id, legal_name: ind.legal_name, customer_type: 'INDIVIDUAL', bank_id: bankId, existed: true });
+						} else {
+							const customer = await client.createCustomer(bankId, {
+								legal_name: ind.legal_name,
+								mobile_phone_number: ind.phone,
+								email: ind.email,
+								date_of_birth: ind.dob ? new Date(ind.dob).toISOString().replace(/\.\d{3}Z$/, 'Z') : undefined,
+								title: ind.title,
+								employment_status: ind.employment,
+								highest_education_attained: ind.education || undefined,
+								relationship_status: ind.relationship,
+								kyc_status: true,
+								credit_limit: { currency: CURRENCY, amount: '50000' },
+								credit_rating: { rating: 'A', source: 'OBP' },
+								last_ok_date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+							});
+							customerMap[`${bankId}::${ind.legal_name}`] = customer.customer_id;
+							results.customers.push({ customer_id: customer.customer_id, legal_name: customer.legal_name, customer_type: 'INDIVIDUAL', bank_id: bankId, existed: false });
+							logger.info(`Created individual customer: ${ind.legal_name} at ${bankId}`);
+						}
+					} catch (e: any) {
+						results.errors.push(`Customer ${ind.legal_name} at ${bankId}: ${e.message}`);
+					}
+					await delay(100);
+				}
+			}
+
+			for (const corp of CORPORATES) {
+				for (const bankId of corp.banks) {
+					try {
+						let existingCustomers: Array<{ customer_id: string; legal_name: string }> = [];
+						try {
+							const resp = await client.getCustomersAtBank(bankId);
+							existingCustomers = resp.customers || [];
+						} catch { /* ignore */ }
+
+						const existing = existingCustomers.find(c => c.legal_name === corp.legal_name);
+						if (existing) {
+							customerMap[`${bankId}::${corp.legal_name}`] = existing.customer_id;
+							results.customers.push({ customer_id: existing.customer_id, legal_name: corp.legal_name, customer_type: 'CORPORATE', bank_id: bankId, existed: true });
+						} else {
+							const customer = await client.createCorporateCustomer(bankId, {
+								legal_name: corp.legal_name,
+								mobile_phone_number: corp.phone,
+								email: corp.email,
+								kyc_status: true,
+								credit_limit: { currency: CURRENCY, amount: '1000000' },
+								credit_rating: { rating: 'AAA', source: 'OBP' },
+								last_ok_date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+							});
+							customerMap[`${bankId}::${corp.legal_name}`] = customer.customer_id;
+							results.customers.push({ customer_id: customer.customer_id, legal_name: customer.legal_name, customer_type: 'CORPORATE', bank_id: bankId, existed: false });
+							logger.info(`Created corporate customer: ${corp.legal_name} at ${bankId}`);
+						}
+					} catch (e: any) {
+						results.errors.push(`Corporate ${corp.legal_name} at ${bankId}: ${e.message}`);
+					}
+					await delay(100);
+				}
+			}
+
+			// ── Step 4: Create Customer-Account Links ──
+			logger.info('Investigation case: Creating customer-account links...');
+			for (const accDef of ACCOUNTS) {
+				const accountId = accountMap[`${accDef.bank_id}::${accDef.label}`];
+				const customerId = customerMap[`${accDef.bank_id}::${accDef.owner}`];
+				if (!accountId || !customerId) continue;
+
+				try {
+					await client.createCustomerAccountLink(accDef.bank_id, {
+						customer_id: customerId,
+						bank_id: accDef.bank_id,
+						account_id: accountId,
+						relationship_type: 'Owner'
+					});
+					results.customerAccountLinks.push({ legal_name: accDef.owner, account_label: accDef.label, existed: false });
+					logger.info(`Linked ${accDef.owner} → ${accDef.label}`);
+				} catch (e: any) {
+					results.errors.push(`Customer-Account Link ${accDef.owner} → ${accDef.label}: ${e.message}`);
+				}
+				await delay(100);
+			}
+
+			// ── Step 5: Create Customer Links (customer-to-customer relationships) ──
+			logger.info('Investigation case: Creating customer links...');
+			const CUSTOMER_LINKS: Array<{ bank_id: string; customer_name: string; other_customer_name: string; relationship_to: string }> = [
+				// Thabo & Lerato are married
+				{ bank_id: bank1, customer_name: 'Thabo Maseko', other_customer_name: 'Lerato Maseko', relationship_to: 'spouse' },
+				// Thabo is a close associate of Karabo (suspicious vendor relationship)
+				{ bank_id: bank2, customer_name: 'Thabo Maseko', other_customer_name: 'Karabo Molefe', relationship_to: 'close_associate' },
+				// Nomsa is a colleague at Mzansi Engineering
+				{ bank_id: bank1, customer_name: 'Thabo Maseko', other_customer_name: 'Nomsa Dlamini', relationship_to: 'business_partner' },
+			];
+
+			for (const linkDef of CUSTOMER_LINKS) {
+				const customerId = customerMap[`${linkDef.bank_id}::${linkDef.customer_name}`];
+				const otherCustomerId = customerMap[`${linkDef.bank_id}::${linkDef.other_customer_name}`];
+				if (!customerId || !otherCustomerId) {
+					results.errors.push(`Customer link skipped — could not resolve "${linkDef.customer_name}" or "${linkDef.other_customer_name}" at ${linkDef.bank_id}`);
+					continue;
+				}
+
+				try {
+					await client.createCustomerLink(linkDef.bank_id, {
+						customer_id: customerId,
+						other_bank_id: linkDef.bank_id,
+						other_customer_id: otherCustomerId,
+						relationship_to: linkDef.relationship_to
+					});
+					results.customerLinks.push({
+						customer_name: linkDef.customer_name,
+						other_customer_name: linkDef.other_customer_name,
+						relationship_to: linkDef.relationship_to,
+						bank_id: linkDef.bank_id,
+						existed: false
+					});
+					logger.info(`Created customer link: ${linkDef.customer_name} → ${linkDef.other_customer_name} (${linkDef.relationship_to})`);
+				} catch (e: any) {
+					results.errors.push(`Customer link ${linkDef.customer_name} → ${linkDef.other_customer_name}: ${e.message}`);
+				}
+				await delay(100);
+			}
+
+			// ── Step 6: Create Transactions ──
+			logger.info('Investigation case: Creating transaction history...');
+			for (const txnDef of TRANSACTIONS) {
+				const fromAccountId = accountMap[`${txnDef.bank_id}::${txnDef.from_label}`];
+				const toAccountId = accountMap[`${txnDef.bank_id}::${txnDef.to_label}`];
+				if (!fromAccountId || !toAccountId) {
+					results.errors.push(`Transaction skipped — could not resolve accounts for "${txnDef.description}" at ${txnDef.bank_id}`);
+					continue;
+				}
+
+				try {
+					const posted = new Date(txnDef.date).toISOString().replace(/\.\d{3}Z$/, 'Z');
+					const txn = await client.createHistoricalTransaction(txnDef.bank_id, {
+						from_account_id: fromAccountId,
+						to_account_id: toAccountId,
+						value: { currency: CURRENCY, amount: txnDef.amount },
+						description: txnDef.description,
+						posted,
+						completed: posted
+					});
+					results.transactions.push({
+						transaction_id: txn.transaction_id,
+						bank_id: txnDef.bank_id,
+						from_account_id: fromAccountId,
+						to_account_id: toAccountId,
+						amount: `${txnDef.amount} ${CURRENCY}`,
+						existed: false,
+						description: txnDef.description
+					});
+					logger.info(`Created transaction: ${txnDef.description} (${txnDef.amount} ZAR)`);
+				} catch (e: any) {
+					results.errors.push(`Transaction "${txnDef.description}": ${e.message}`);
+				}
+				await delay(100);
+			}
+
+			logger.info(`Investigation case complete: ${results.banks.length} banks, ${results.accounts.length} accounts, ${results.customers.length} customers, ${results.customerAccountLinks.length} account links, ${results.customerLinks.length} customer links, ${results.transactions.length} transactions`);
+
+			return {
+				success: true,
+				action: 'investigationCase',
+				results
+			};
+		} catch (e: any) {
+			logger.error('Investigation case population failed:', e);
+			return fail(500, { error: e.message || 'Investigation case population failed', results });
 		}
 	}
 };

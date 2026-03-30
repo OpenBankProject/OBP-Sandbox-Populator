@@ -23,6 +23,8 @@ import type {
 	UserCustomerLink,
 	UserCustomerLinksResponse,
 	CreateUserCustomerLinkPayload,
+	CustomerLink,
+	CreateCustomerLinkPayload,
 	CustomerAccountLink,
 	CreateCustomerAccountLinkPayload,
 	PersonalDataField,
@@ -143,12 +145,10 @@ export class OBPClient {
 	}
 
 	async bankExists(bankId: string): Promise<boolean> {
-		try {
-			await this.getBank(bankId);
-			return true;
-		} catch {
-			return false;
-		}
+		const response = await fetch(this.url(`/banks/${bankId}`), {
+			headers: this.getHeaders()
+		});
+		return response.ok;
 	}
 
 	// Entitlement endpoints
@@ -432,6 +432,16 @@ export class OBPClient {
 			body: JSON.stringify(payload)
 		});
 		return this.handleResponse<UserCustomerLink>(response);
+	}
+
+	// Customer Link endpoints (customer-to-customer relationships)
+	async createCustomerLink(bankId: string, payload: CreateCustomerLinkPayload): Promise<CustomerLink> {
+		const response = await fetch(this.url(`/banks/${bankId}/customer-links`), {
+			method: 'POST',
+			headers: this.getHeaders(),
+			body: JSON.stringify(payload)
+		});
+		return this.handleResponse<CustomerLink>(response);
 	}
 
 	// Customer Account Link endpoints

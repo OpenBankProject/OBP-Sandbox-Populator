@@ -276,6 +276,25 @@ export interface CreateUserCustomerLinkPayload {
 	customer_id: string;
 }
 
+// Customer Link Types (customer-to-customer relationships)
+export interface CustomerLink {
+	customer_link_id: string;
+	bank_id: string;
+	customer_id: string;
+	other_bank_id: string;
+	other_customer_id: string;
+	relationship_to: string;
+	date_inserted: string;
+	date_updated: string;
+}
+
+export interface CreateCustomerLinkPayload {
+	customer_id: string;
+	other_bank_id: string;
+	other_customer_id: string;
+	relationship_to: string;
+}
+
 // Customer Account Link Types
 export interface CustomerAccountLink {
 	customer_account_link_id: string;

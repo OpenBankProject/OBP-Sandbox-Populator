@@ -20,7 +20,9 @@
 		Send,
 		ArrowRightLeft,
 		UserCheck,
-		Building2
+		Building2,
+		ShieldAlert,
+		Link
 	} from '@lucide/svelte';
 	import { deserialize } from '$app/forms';
 
@@ -30,6 +32,7 @@
 	let isLoadingPreview = $state(false);
 	let isLoadingCounterpartyTxn = $state(false);
 	let isLoadingAccountTxn = $state(false);
+	let isLoadingInvestigation = $state(false);
 	let showPreview = $state(false);
 	let previewData = $state<any>(null);
 	let numBanks = $state(data.defaults.numBanks);
@@ -57,6 +60,7 @@
 	let createTransactions = $state(true);
 	let createUsers = $state(true);
 	let createUserCustomerLinks = $state(true);
+	let createCustomerLinks = $state(true);
 
 	// Copy states for each section
 	let copiedSection = $state<string | null>(null);
@@ -107,6 +111,11 @@
 	function formatUserCustomerLinks() {
 		if (!form?.results?.userCustomerLinks) return '';
 		return form.results.userCustomerLinks.map(l => `${l.username} → ${l.legal_name}`).join('\n');
+	}
+
+	function formatCustomerLinks() {
+		if (!form?.results?.customerLinks) return '';
+		return form.results.customerLinks.map(l => `${l.customer_name} → ${l.other_customer_name} (${l.relationship_to})`).join('\n');
 	}
 
 	function formatErrors() {
@@ -242,7 +251,7 @@
 						/>
 					</div>
 				</div>
-				<p class="text-xs text-surface-500 -mt-2">Banks will be: <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.1</code>, <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}.bnk.2</code>, ...</p>
+				<p class="text-xs text-surface-500 -mt-2">Banks will be: <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}-bnk-1</code>, <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}-bnk-2</code>, ...</p>
 
 				<!-- Country & Currency -->
 				<div class="grid grid-cols-2 gap-4">
@@ -402,6 +411,20 @@
 							Create User-Customer Links
 						</span>
 					</label>
+
+					<label class="flex items-center gap-3 cursor-pointer">
+						<input
+							type="checkbox"
+							name="createCustomerLinks"
+							bind:checked={createCustomerLinks}
+							class="checkbox"
+							disabled={isLoading || !createCustomers}
+						/>
+						<span class="flex items-center gap-2">
+							<Link class="size-4 text-tertiary-500" />
+							Create Customer Links (spouse, associate, etc.)
+						</span>
+					</label>
 				</div>
 
 				<div class="grid grid-cols-2 gap-3 mt-6">
@@ -497,6 +520,10 @@
 							<div class="text-lg font-bold text-secondary-400">{preview.summary.userCustomerLinks}</div>
 							<div class="text-surface-400">User Links</div>
 						</div>
+						<div class="card p-2 preset-filled-surface-200-800 text-center">
+							<div class="text-lg font-bold text-secondary-400">{preview.summary.customerLinks}</div>
+							<div class="text-surface-400">Customer Links</div>
+						</div>
 					</div>
 
 					<p class="text-xs text-surface-400 mb-3">
@@ -520,6 +547,68 @@
 					</details>
 				</div>
 			{/if}
+
+			<hr class="border-surface-700 my-4" />
+
+			<p class="text-sm font-medium mb-3">Investigation Demo</p>
+			<form
+				method="POST"
+				action="?/populateInvestigationCase"
+				use:enhance={() => {
+					isLoadingInvestigation = true;
+					return async ({ update }) => {
+						await update();
+						isLoadingInvestigation = false;
+					};
+				}}
+			>
+				<div class="mb-2">
+					<label for="casePrefix" class="block text-xs font-medium mb-1">Bank ID Prefix</label>
+					<input
+						type="text"
+						id="casePrefix"
+						name="casePrefix"
+						bind:value={bankIdPrefix}
+						class="input w-full text-sm"
+						placeholder="e.g. run1"
+						disabled={isLoadingInvestigation}
+					/>
+				</div>
+				<div class="mb-2">
+					<label for="caseBankIds" class="block text-xs font-medium mb-1">Bank IDs (comma-separated, min 3)</label>
+					<input
+						type="text"
+						id="caseBankIds"
+						name="caseBankIds"
+						value="za-fnb-inv, za-std-inv, za-ndb-inv"
+						class="input w-full text-sm"
+						placeholder="bank1, bank2, bank3"
+						disabled={isLoadingInvestigation}
+					/>
+					<p class="text-xs text-surface-500 mt-1">Bank 1 = normal layer, Bank 2 = suspicious layer, Bank 3 = expansion. Prefix applied: <code class="bg-surface-700 px-1 rounded">{bankIdPrefix}-bank1</code></p>
+				</div>
+				<button
+					type="submit"
+					class="btn preset-filled-warning-500 w-full text-sm mb-2"
+					disabled={isLoading || isLoadingInvestigation || isLoadingCounterpartyTxn || isLoadingAccountTxn}
+				>
+					{#if isLoadingInvestigation}
+						<Loader2 class="size-4 animate-spin mr-1" />
+						Populating Investigation Case...
+					{:else}
+						<ShieldAlert class="size-4 mr-1" />
+						Populate Case Example
+					{/if}
+				</button>
+				<p class="text-xs text-surface-500 mb-1">Creates a fraud investigation dataset across your banks:</p>
+				<ul class="text-xs text-surface-500 space-y-0.5 ml-4 list-disc">
+					<li>3 banks (your IDs, prefixed)</li>
+					<li>6 customers (individuals + shell companies)</li>
+					<li>10 accounts with customer-account links</li>
+					<li>3 customer links (spouse, close_associate, business_partner)</li>
+					<li>30 transactions: normal salary layer + suspicious consulting fees + investigative expansion</li>
+				</ul>
+			</form>
 
 			<hr class="border-surface-700 my-4" />
 
@@ -646,6 +735,33 @@
 					</ul>
 					<p class="text-xs text-surface-500 mt-6">This may take a moment depending on the number of items...</p>
 				</div>
+			{:else if isLoadingInvestigation}
+				<div class="py-6 text-surface-400">
+					<p class="text-sm mb-4 flex items-center gap-2"><ShieldAlert class="size-4 text-warning-400" /> Populating investigation case...</p>
+					<ul class="space-y-3">
+						<li class="flex items-center gap-3">
+							<Loader2 class="size-4 animate-spin text-primary-400" />
+							<span>Creating 3 South African banks...</span>
+						</li>
+						<li class="flex items-center gap-3">
+							<Loader2 class="size-4 animate-spin text-primary-400" />
+							<span>Creating 10 accounts...</span>
+						</li>
+						<li class="flex items-center gap-3">
+							<Loader2 class="size-4 animate-spin text-primary-400" />
+							<span>Creating 6 customers (individuals + corporates)...</span>
+						</li>
+						<li class="flex items-center gap-3">
+							<Loader2 class="size-4 animate-spin text-primary-400" />
+							<span>Linking customers to accounts...</span>
+						</li>
+						<li class="flex items-center gap-3">
+							<Loader2 class="size-4 animate-spin text-primary-400" />
+							<span>Creating 30 transactions (salary + suspicious + expansion)...</span>
+						</li>
+					</ul>
+					<p class="text-xs text-surface-500 mt-6">This may take a moment...</p>
+				</div>
 			{:else if isLoadingCounterpartyTxn || isLoadingAccountTxn}
 				<div class="py-6 text-surface-400">
 					<p class="text-sm mb-4">Creating transaction requests...</p>
@@ -655,6 +771,207 @@
 							<span>Creating 10 transaction requests...</span>
 						</li>
 					</ul>
+				</div>
+			{:else if form?.success && form?.action === 'investigationCase' && form.results}
+				{@const invResults = form.results as any}
+				<div class="space-y-4 max-h-[60vh] overflow-y-auto">
+					<p class="text-sm text-surface-400 mb-2 flex items-center gap-2">
+						<ShieldAlert class="size-4 text-warning-400" />
+						Investigation Case — SA Fraud Detection Demo
+					</p>
+
+					<!-- Banks -->
+					<div class="p-3 rounded-lg bg-surface-800/50">
+						<div class="flex items-center gap-2 mb-2">
+							<Building class="size-4 text-secondary-500" />
+							<span class="font-medium">Banks: {invResults.banks.length}</span>
+							{#if invResults.banks.filter(b => !b.existed).length > 0}
+								<span class="text-xs text-success-400">{invResults.banks.filter(b => !b.existed).length} new</span>
+							{/if}
+							{#if invResults.banks.filter(b => b.existed).length > 0}
+								<span class="text-xs text-warning-400">{invResults.banks.filter(b => b.existed).length} existing</span>
+							{/if}
+						</div>
+						<ul class="text-sm text-surface-400 ml-6 space-y-1">
+							{#each invResults.banks as bank}
+								<li class="flex items-center gap-1">
+									{#if bank.existed}
+										<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+									{:else}
+										<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+									{/if}
+									<a href={getBankUrl(bank)} target="_blank" rel="noopener noreferrer" class="text-primary-400 hover:text-primary-300 flex items-center gap-1">
+										<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{bank.bank_id}</code>
+										<ExternalLink class="size-3" />
+									</a>
+									<span class="text-surface-500 mx-1">|</span>
+									<span class="text-surface-300">{bank.full_name}</span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+
+					<!-- Accounts -->
+					<div class="p-3 rounded-lg bg-surface-800/50">
+						<div class="flex items-center gap-2 mb-2">
+							<Wallet class="size-4 text-secondary-500" />
+							<span class="font-medium">Accounts: {invResults.accounts.length}</span>
+							{#if invResults.accounts.filter(a => !a.existed).length > 0}
+								<span class="text-xs text-success-400">{invResults.accounts.filter(a => !a.existed).length} new</span>
+							{/if}
+						</div>
+						<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-32 overflow-y-auto">
+							{#each invResults.accounts as account}
+								<li class="flex items-center gap-1">
+									{#if account.existed}
+										<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+									{:else}
+										<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+									{/if}
+									<a href={getAccountUrl(account)} target="_blank" rel="noopener noreferrer" class="text-primary-400 hover:text-primary-300 flex items-center gap-1">
+										<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{account.account_id}</code>
+										<ExternalLink class="size-3" />
+									</a>
+									<span class="text-surface-500 mx-1">|</span>
+									<span class="text-surface-300">{account.label}</span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+
+					<!-- Customers -->
+					<div class="p-3 rounded-lg bg-surface-800/50">
+						<div class="flex items-center gap-2 mb-2">
+							<UserCheck class="size-4 text-secondary-500" />
+							<span class="font-medium">Customers: {invResults.customers.length}</span>
+							{#if invResults.customers.filter(c => !c.existed).length > 0}
+								<span class="text-xs text-success-400">{invResults.customers.filter(c => !c.existed).length} new</span>
+							{/if}
+						</div>
+						<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-32 overflow-y-auto">
+							{#each invResults.customers as cust}
+								<li class="flex items-center gap-1">
+									{#if cust.existed}
+										<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+									{:else}
+										<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+									{/if}
+									{#if cust.customer_type === 'CORPORATE'}
+										<Building2 class="size-3 text-tertiary-400" />
+									{:else}
+										<UserCheck class="size-3 text-tertiary-400" />
+									{/if}
+									<a
+										href={getCustomersUrl(cust.customer_type === 'CORPORATE' ? 'corporate' : 'individual')}
+										target="_blank" rel="noopener noreferrer" class="text-primary-400 hover:text-primary-300 flex items-center gap-1"
+									>
+										<span>{cust.legal_name}</span>
+										<ExternalLink class="size-3" />
+									</a>
+									<span class="text-surface-500 mx-1">|</span>
+									<span class="text-xs px-1 rounded {cust.customer_type === 'CORPORATE' ? 'bg-tertiary-700' : 'bg-secondary-700'}">{cust.customer_type}</span>
+									<span class="text-surface-500 mx-1">@</span>
+									<span class="text-xs text-surface-500">{cust.bank_id}</span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+
+					<!-- Customer-Account Links -->
+					{#if invResults.customerAccountLinks && invResults.customerAccountLinks.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center gap-2 mb-2">
+								<ArrowRightLeft class="size-4 text-secondary-500" />
+								<span class="font-medium">Customer-Account Links: {invResults.customerAccountLinks.length}</span>
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-32 overflow-y-auto">
+								{#each invResults.customerAccountLinks as link}
+									<li class="flex items-center gap-1">
+										{#if link.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
+										<span class="text-surface-300">{link.legal_name}</span>
+										<span class="text-surface-400 mx-1">→</span>
+										<span class="text-surface-300">{link.account_label}</span>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					<!-- Customer Links -->
+					{#if invResults.customerLinks && invResults.customerLinks.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center gap-2 mb-2">
+								<Link class="size-4 text-secondary-500" />
+								<span class="font-medium">Customer Links: {invResults.customerLinks.length}</span>
+								{#if invResults.customerLinks.filter(l => !l.existed).length > 0}
+									<span class="text-xs text-success-400">{invResults.customerLinks.filter(l => !l.existed).length} new</span>
+								{/if}
+								{#if invResults.customerLinks.filter(l => l.existed).length > 0}
+									<span class="text-xs text-warning-400">{invResults.customerLinks.filter(l => l.existed).length} existing</span>
+								{/if}
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-32 overflow-y-auto">
+								{#each invResults.customerLinks as link}
+									<li class="flex items-center gap-1">
+										{#if link.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
+										<span class="text-surface-300">{link.customer_name}</span>
+										<span class="text-surface-400 mx-1">→</span>
+										<span class="text-surface-300">{link.other_customer_name}</span>
+										<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded ml-1">{link.relationship_to}</code>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					<!-- Transactions -->
+					<div class="p-3 rounded-lg bg-surface-800/50">
+						<div class="flex items-center gap-2 mb-2">
+							<History class="size-4 text-secondary-500" />
+							<span class="font-medium">Transactions: {invResults.transactions.length}</span>
+							{#if invResults.transactions.filter(t => !t.existed).length > 0}
+								<span class="text-xs text-success-400">{invResults.transactions.filter(t => !t.existed).length} new</span>
+							{/if}
+						</div>
+						<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-48 overflow-y-auto">
+							{#each invResults.transactions as txn}
+								<li class="flex items-center gap-1">
+									<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+									<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{txn.transaction_id}</code>
+									<span class="text-surface-500 mx-1">|</span>
+									<span class="text-tertiary-400">{txn.amount}</span>
+									<span class="text-surface-500 mx-1">|</span>
+									<span class="text-surface-300 truncate max-w-48">{txn.description}</span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+
+					<!-- Errors -->
+					{#if invResults.errors && invResults.errors.length > 0}
+						<div class="p-3 rounded-lg bg-error-900/30 border border-error-700">
+							<div class="flex items-center gap-2 mb-2">
+								<XCircle class="size-4 text-error-500" />
+								<span class="font-medium text-error-400">Errors: {invResults.errors.length}</span>
+							</div>
+							<ul class="text-sm text-error-300 ml-6 space-y-1 max-h-32 overflow-y-auto">
+								{#each invResults.errors.slice(0, 10) as error}
+									<li class="truncate">{error}</li>
+								{/each}
+								{#if invResults.errors.length > 10}
+									<li class="text-error-400">...and {invResults.errors.length - 10} more</li>
+								{/if}
+							</ul>
+						</div>
+					{/if}
 				</div>
 			{:else if form?.success && form?.action && form.results?.transactionRequests}
 				<div class="space-y-4 max-h-[60vh] overflow-y-auto">
@@ -1096,6 +1413,51 @@
 										<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded">{link.username}</code>
 										<span class="text-surface-400 mx-1">→</span>
 										<span class="text-surface-300">{link.legal_name}</span>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					<!-- Customer Links -->
+					{#if form.results.customerLinks && form.results.customerLinks.length > 0}
+						<div class="p-3 rounded-lg bg-surface-800/50">
+							<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center gap-2">
+									<Link class="size-4 text-secondary-500" />
+									<span class="font-medium">Customer Links: {form.results.customerLinks.length}</span>
+									{#if form.results.customerLinks.filter(l => !l.existed).length > 0}
+										<span class="text-xs text-success-400">{form.results.customerLinks.filter(l => !l.existed).length} new</span>
+									{/if}
+									{#if form.results.customerLinks.filter(l => l.existed).length > 0}
+										<span class="text-xs text-warning-400">{form.results.customerLinks.filter(l => l.existed).length} existing</span>
+									{/if}
+								</div>
+								<button
+									type="button"
+									onclick={() => copyToClipboard('customerLinks', formatCustomerLinks())}
+									class="btn btn-sm preset-tonal flex items-center gap-1"
+									title="Copy customer links"
+								>
+									{#if copiedSection === 'customerLinks'}
+										<Check class="size-3" />
+									{:else}
+										<Copy class="size-3" />
+									{/if}
+								</button>
+							</div>
+							<ul class="text-sm text-surface-400 ml-6 space-y-1 max-h-24 overflow-y-auto">
+								{#each form.results.customerLinks as link}
+									<li class="flex items-center gap-1">
+										{#if link.existed}
+											<span title="Already existed"><RotateCcw class="size-3 text-warning-400" /></span>
+										{:else}
+											<span title="Newly created"><Plus class="size-3 text-success-400" /></span>
+										{/if}
+										<span class="text-surface-300">{link.customer_name}</span>
+										<span class="text-surface-400 mx-1">→</span>
+										<span class="text-surface-300">{link.other_customer_name}</span>
+										<code class="text-xs bg-surface-700 text-surface-100 px-1 rounded ml-1">{link.relationship_to}</code>
 									</li>
 								{/each}
 							</ul>
