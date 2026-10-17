@@ -5,15 +5,56 @@ OBP Sandbox Populator
 Creates sandbox data in an Open Bank Project instance:
 - 2 Banks (with bank_id prefixed by authenticated user's username)
 - 5 Accounts per bank (owned by authenticated user)
-- Counterparties representing small businesses in Botswana
+- Counterparties representing small businesses in the configured country
+  (Botswana or Oman)
 """
 import sys
 import random
 from datetime import datetime, timedelta
 from typing import Optional
 from obp_client import OBPClient
-from data.botswana_businesses import get_businesses, get_business_for_counterparty
+from data import botswana_businesses, oman_businesses
+from data.botswana_businesses import get_business_for_counterparty
 import config
+
+
+# Bank definitions per supported country
+BANK_DEFINITIONS = {
+    "Botswana": [
+        {
+            "suffix": "cbb",
+            "full_name": "Commercial Bank of Botswana",
+            "short_name": "CBB",
+            "website": "https://www.cbb.co.bw"
+        },
+        {
+            "suffix": "bsb",
+            "full_name": "Botswana Savings Bank",
+            "short_name": "BSB",
+            "website": "https://www.bsb.co.bw"
+        }
+    ],
+    "Oman": [
+        {
+            "suffix": "cbo",
+            "full_name": "Commercial Bank of Oman",
+            "short_name": "CBO",
+            "website": "https://www.cbo.co.om"
+        },
+        {
+            "suffix": "osb",
+            "full_name": "Oman Savings Bank",
+            "short_name": "OSB",
+            "website": "https://www.osb.co.om"
+        }
+    ]
+}
+
+# Counterparty business data per supported country
+BUSINESS_DATA = {
+    "Botswana": botswana_businesses,
+    "Oman": oman_businesses
+}
 
 
 def get_username_prefix(client: OBPClient) -> tuple:
@@ -46,20 +87,7 @@ def create_banks(client: OBPClient, username: str, count: int = 2) -> list:
         List of created bank data
     """
     banks = []
-    bank_definitions = [
-        {
-            "suffix": "cbb",
-            "full_name": "Commercial Bank of Botswana",
-            "short_name": "CBB",
-            "website": "https://www.cbb.co.bw"
-        },
-        {
-            "suffix": "bsb",
-            "full_name": "Botswana Savings Bank",
-            "short_name": "BSB",
-            "website": "https://www.bsb.co.bw"
-        }
-    ]
+    bank_definitions = BANK_DEFINITIONS[config.COUNTRY]
 
     for i in range(min(count, len(bank_definitions))):
         bank_def = bank_definitions[i]
@@ -115,7 +143,7 @@ def create_fx_rates(client: OBPClient, bank_id: str) -> list:
     # BWP = Botswana Pula, ZAR = South African Rand, KES = Kenyan Shilling
     # NGN = Nigerian Naira, EGP = Egyptian Pound, GHS = Ghanaian Cedi
     # TZS = Tanzanian Shilling, UGX = Ugandan Shilling, ZMW = Zambian Kwacha
-    # NAD = Namibian Dollar, CNY = Chinese Yuan
+    # NAD = Namibian Dollar, CNY = Chinese Yuan, OMR = Omani Rial
     rate_definitions = [
         # BWP (Botswana Pula) pairs
         {"from": "EUR", "to": "BWP", "rate": 14.85},
@@ -188,6 +216,16 @@ def create_fx_rates(client: OBPClient, bank_id: str) -> list:
         {"from": "CNY", "to": "USD", "rate": 0.1389},
         {"from": "BWP", "to": "CNY", "rate": 0.528},
         {"from": "CNY", "to": "BWP", "rate": 1.894},
+
+        # OMR (Omani Rial) pairs - pegged at 1 OMR = 2.6008 USD
+        {"from": "EUR", "to": "OMR", "rate": 0.4191},
+        {"from": "OMR", "to": "EUR", "rate": 2.386},
+        {"from": "USD", "to": "OMR", "rate": 0.3845},
+        {"from": "OMR", "to": "USD", "rate": 2.6008},
+        {"from": "GBP", "to": "OMR", "rate": 0.4883},
+        {"from": "OMR", "to": "GBP", "rate": 2.048},
+        {"from": "BWP", "to": "OMR", "rate": 0.0282},
+        {"from": "OMR", "to": "BWP", "rate": 35.48},
 
         # Major currency pairs
         {"from": "EUR", "to": "USD", "rate": 1.09},
@@ -565,9 +603,9 @@ def populate_sandbox(token: Optional[str] = None):
             create_fx_rates(client, bank_id)
     print()
 
-    # Get Botswana businesses for counterparties
+    # Get businesses for the configured country as counterparties
     # Distribute businesses across accounts
-    all_businesses = get_businesses()
+    all_businesses = BUSINESS_DATA[config.COUNTRY].get_businesses()
     businesses_per_account = len(all_businesses) // (config.NUM_BANKS * config.NUM_ACCOUNTS_PER_BANK)
     if businesses_per_account < 1:
         businesses_per_account = 1

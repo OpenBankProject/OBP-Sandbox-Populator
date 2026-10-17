@@ -324,6 +324,37 @@ const TANZANIA_CORPORATE_CUSTOMERS: CorporateCustomerData[] = [
 	{ legal_name: 'Swahili Coast Hotels Ltd', mobile_phone_number: '+255 22 211 0005', email: 'reservations@swahilicoast.example.tz', category: 'Tourism & Hospitality' },
 ];
 
+// ─── Oman ───────────────────────────────────────────────────────────────────
+
+const OMAN_BUSINESSES: Business[] = [
+	{ name: 'Muttrah Souq Frankincense', description: 'Frankincense and traditional perfumes', category: 'Retail - Perfumes', location: 'Muscat', account_number: 'OM0001000001', bank_code: 'BMUSOMRX' },
+	{ name: 'Nizwa Pottery Works', description: 'Handmade traditional Omani pottery', category: 'Retail - Arts & Crafts', location: 'Nizwa', account_number: 'OM0001000002', bank_code: 'NBOMOMRX' },
+	{ name: 'Dhofar Coconut Traders', description: 'Coconut and tropical produce supplier', category: 'Agriculture - Produce', location: 'Salalah', account_number: 'OM0001000003', bank_code: 'BDOFOMRU' },
+	{ name: 'Sur Dhow Builders', description: 'Traditional wooden boat building', category: 'Manufacturing - Marine', location: 'Sur', account_number: 'OM0001000004', bank_code: 'BMUSOMRX' },
+	{ name: 'Al Batinah Date Farms', description: 'Date cultivation and packaging', category: 'Agriculture - Dates', location: 'Sohar', account_number: 'OM0001000005', bank_code: 'NBOMOMRX' },
+	{ name: 'Wahiba Sands Desert Camps', description: 'Desert tourism and camping', category: 'Tourism', location: 'Bidiyah', account_number: 'OM0001000006', bank_code: 'BDOFOMRU' },
+	{ name: 'Muscat Fish Market Co', description: 'Fresh seafood wholesale', category: 'Food Processing', location: 'Muscat', account_number: 'OM0001000007', bank_code: 'BMUSOMRX' },
+	{ name: 'Jebel Akhdar Rose Water', description: 'Rose water distillation and sales', category: 'Agriculture - Floriculture', location: 'Jebel Akhdar', account_number: 'OM0001000008', bank_code: 'NBOMOMRX' },
+	{ name: 'Duqm Logistics LLC', description: 'Port logistics and freight forwarding', category: 'Transport & Logistics', location: 'Duqm', account_number: 'OM0001000009', bank_code: 'BDOFOMRU' },
+	{ name: 'Qurum Tech Solutions LLC', description: 'Software and IT consulting', category: 'Technology Services', location: 'Muscat', account_number: 'OM0001000010', bank_code: 'BMUSOMRX' },
+];
+
+const OMAN_INDIVIDUAL_CUSTOMERS: IndividualCustomerData[] = [
+	{ legal_name: 'Salim Al Harthy', mobile_phone_number: '+968 9123 4501', email: 's.alharthy@example.om', date_of_birth: '1985-04-12', title: 'Mr.', employment_status: 'employed', highest_education_attained: 'Bachelor', relationship_status: 'married' },
+	{ legal_name: 'Aisha Al Balushi', mobile_phone_number: '+968 9234 5602', email: 'a.albalushi@example.om', date_of_birth: '1992-09-27', title: 'Ms.', employment_status: 'employed', highest_education_attained: 'Master', relationship_status: 'single' },
+	{ legal_name: 'Khalid Al Rawahi', mobile_phone_number: '+968 9345 6703', email: 'k.alrawahi@example.om', date_of_birth: '1978-01-30', title: 'Mr.', employment_status: 'self-employed', highest_education_attained: 'Diploma', relationship_status: 'married' },
+	{ legal_name: 'Maryam Al Lawati', mobile_phone_number: '+968 9456 7804', email: 'm.allawati@example.om', date_of_birth: '1995-06-08', title: 'Ms.', employment_status: 'employed', highest_education_attained: 'Bachelor', relationship_status: 'single' },
+	{ legal_name: 'Hamed Al Busaidi', mobile_phone_number: '+968 9567 8905', email: 'h.albusaidi@example.om', date_of_birth: '1983-11-15', title: 'Dr.', employment_status: 'employed', highest_education_attained: 'Doctorate', relationship_status: 'married' },
+];
+
+const OMAN_CORPORATE_CUSTOMERS: CorporateCustomerData[] = [
+	{ legal_name: 'Al Hajar Cement Co SAOG', mobile_phone_number: '+968 2411 0001', email: 'info@alhajarcement.example.om', category: 'Manufacturing' },
+	{ legal_name: 'Majan Renewable Energy LLC', mobile_phone_number: '+968 2411 0002', email: 'contact@majanrenew.example.om', category: 'Energy' },
+	{ legal_name: 'Sultanate Telecom SAOC', mobile_phone_number: '+968 2411 0003', email: 'hello@sultanatetel.example.om', category: 'Telecommunications' },
+	{ legal_name: 'Dhofar Fisheries Corp', mobile_phone_number: '+968 2411 0004', email: 'info@dhofarfish.example.om', category: 'Agriculture & Fisheries' },
+	{ legal_name: 'Royal Arabian Hotels LLC', mobile_phone_number: '+968 2411 0005', email: 'reservations@royalarabian.example.om', category: 'Tourism & Hospitality' },
+];
+
 // ─── Country registry ───────────────────────────────────────────────────────
 
 export const COUNTRIES: Record<string, CountryConfig> = {
@@ -417,6 +448,16 @@ export const COUNTRIES: Record<string, CountryConfig> = {
 		individualCustomers: TANZANIA_INDIVIDUAL_CUSTOMERS,
 		corporateCustomers: TANZANIA_CORPORATE_CUSTOMERS,
 	},
+	OM: {
+		code: 'OM',
+		name: 'Oman',
+		currency: 'OMR',
+		phonePrefix: '+968',
+		emailDomain: 'example.om',
+		businesses: OMAN_BUSINESSES,
+		individualCustomers: OMAN_INDIVIDUAL_CUSTOMERS,
+		corporateCustomers: OMAN_CORPORATE_CUSTOMERS,
+	},
 };
 
 export const COUNTRY_LIST = Object.values(COUNTRIES);
@@ -487,4 +528,141 @@ export function toCreateCorporateCustomerPayload(data: CorporateCustomerData, cu
 		credit_rating: { rating: 'AA', source: 'OBP' },
 		last_ok_date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
 	};
+}
+
+// ─── Investigation case example ─────────────────────────────────────────────
+// Localised cast for the "Populate Case Example" fraud investigation demo.
+// Roles: suspect (married to spouse), colleague at the employer, vendor (close associate),
+// employer (pays salaries), consultancy (shell company), holdings (source of suspicious funds).
+
+export interface CasePerson {
+	legal_name: string;
+	phone: string;
+	email: string;
+	dob: string;
+}
+
+export interface CaseCompany {
+	legal_name: string;
+	short_name: string;
+	phone: string;
+	email: string;
+}
+
+export interface CaseExampleCast {
+	bankIds: string[];
+	suspect: CasePerson;
+	spouse: CasePerson;
+	colleague: CasePerson;
+	vendor: CasePerson;
+	employer: CaseCompany;
+	consultancy: CaseCompany;
+	holdings: CaseCompany;
+}
+
+const CASE_EXAMPLES: Record<string, CaseExampleCast> = {
+	BW: {
+		bankIds: ['bw-fnbb-inv', 'bw-sbic-inv', 'bw-absa-inv'],
+		suspect: { legal_name: 'Kagiso Mothibi', phone: '+267 71 555 0101', email: 'kagiso.mothibi@example.bw', dob: '1984-06-15' },
+		spouse: { legal_name: 'Boitumelo Mothibi', phone: '+267 72 555 0102', email: 'boitumelo.mothibi@example.bw', dob: '1986-09-22' },
+		colleague: { legal_name: 'Neo Kgosi', phone: '+267 73 555 0103', email: 'neo.kgosi@example.bw', dob: '1990-02-10' },
+		vendor: { legal_name: 'Tebogo Seretse', phone: '+267 74 555 0104', email: 'tebogo.seretse@example.bw', dob: '1979-12-03' },
+		employer: { legal_name: 'Kgalagadi Engineering (Pty) Ltd', short_name: 'Kgalagadi Engineering', phone: '+267 390 0200', email: 'info@kgalagadi-eng.example.bw' },
+		consultancy: { legal_name: 'Blue Kite Consulting (Pty) Ltd', short_name: 'Blue Kite Consulting', phone: '+267 390 0300', email: 'admin@bluekite.example.bw' },
+		holdings: { legal_name: 'Sechaba Holdings (Pty) Ltd', short_name: 'Sechaba Holdings', phone: '+267 390 0400', email: 'finance@sechaba.example.bw' },
+	},
+	SG: {
+		bankIds: ['sg-dbs-inv', 'sg-ocbc-inv', 'sg-uob-inv'],
+		suspect: { legal_name: 'Tan Wei Ming', phone: '+65 9123 0101', email: 'weiming.tan@example.sg', dob: '1984-06-15' },
+		spouse: { legal_name: 'Lim Mei Ling', phone: '+65 9123 0102', email: 'meiling.lim@example.sg', dob: '1986-09-22' },
+		colleague: { legal_name: 'Priya Nair', phone: '+65 9123 0103', email: 'priya.nair@example.sg', dob: '1990-02-10' },
+		vendor: { legal_name: 'Ahmad Rahman', phone: '+65 9123 0104', email: 'ahmad.rahman@example.sg', dob: '1979-12-03' },
+		employer: { legal_name: 'Merlion Engineering Pte Ltd', short_name: 'Merlion Engineering', phone: '+65 6555 0200', email: 'info@merlion-eng.example.sg' },
+		consultancy: { legal_name: 'Blue Kite Consulting Pte Ltd', short_name: 'Blue Kite Consulting', phone: '+65 6555 0300', email: 'admin@bluekite.example.sg' },
+		holdings: { legal_name: 'Straits Holdings Pte Ltd', short_name: 'Straits Holdings', phone: '+65 6555 0400', email: 'finance@straits.example.sg' },
+	},
+	JP: {
+		bankIds: ['jp-mufg-inv', 'jp-smbc-inv', 'jp-mizuho-inv'],
+		suspect: { legal_name: 'Takashi Sato', phone: '+81 90 5550 0101', email: 'takashi.sato@example.jp', dob: '1984-06-15' },
+		spouse: { legal_name: 'Yuko Sato', phone: '+81 90 5550 0102', email: 'yuko.sato@example.jp', dob: '1986-09-22' },
+		colleague: { legal_name: 'Haruka Suzuki', phone: '+81 90 5550 0103', email: 'haruka.suzuki@example.jp', dob: '1990-02-10' },
+		vendor: { legal_name: 'Kenji Watanabe', phone: '+81 90 5550 0104', email: 'kenji.watanabe@example.jp', dob: '1979-12-03' },
+		employer: { legal_name: 'Fuji Engineering Co., Ltd.', short_name: 'Fuji Engineering', phone: '+81 3 5550 0200', email: 'info@fuji-eng.example.jp' },
+		consultancy: { legal_name: 'Blue Kite Consulting K.K.', short_name: 'Blue Kite Consulting', phone: '+81 3 5550 0300', email: 'admin@bluekite.example.jp' },
+		holdings: { legal_name: 'Sakura Holdings K.K.', short_name: 'Sakura Holdings', phone: '+81 3 5550 0400', email: 'finance@sakura.example.jp' },
+	},
+	GB: {
+		bankIds: ['gb-hsbc-inv', 'gb-barc-inv', 'gb-lloy-inv'],
+		suspect: { legal_name: 'James Whitaker', phone: '+44 7700 900101', email: 'james.whitaker@example.co.uk', dob: '1984-06-15' },
+		spouse: { legal_name: 'Sarah Whitaker', phone: '+44 7700 900102', email: 'sarah.whitaker@example.co.uk', dob: '1986-09-22' },
+		colleague: { legal_name: 'Emily Clarke', phone: '+44 7700 900103', email: 'emily.clarke@example.co.uk', dob: '1990-02-10' },
+		vendor: { legal_name: 'Daniel Hughes', phone: '+44 7700 900104', email: 'daniel.hughes@example.co.uk', dob: '1979-12-03' },
+		employer: { legal_name: 'Thames Engineering Ltd', short_name: 'Thames Engineering', phone: '+44 20 7946 0200', email: 'info@thames-eng.example.co.uk' },
+		consultancy: { legal_name: 'Blue Kite Consulting Ltd', short_name: 'Blue Kite Consulting', phone: '+44 20 7946 0300', email: 'admin@bluekite.example.co.uk' },
+		holdings: { legal_name: 'Ashford Holdings Ltd', short_name: 'Ashford Holdings', phone: '+44 20 7946 0400', email: 'finance@ashford.example.co.uk' },
+	},
+	US: {
+		bankIds: ['us-chase-inv', 'us-boa-inv', 'us-wf-inv'],
+		suspect: { legal_name: 'Michael Carter', phone: '+1 212 555 0101', email: 'michael.carter@example.com', dob: '1984-06-15' },
+		spouse: { legal_name: 'Jennifer Carter', phone: '+1 212 555 0102', email: 'jennifer.carter@example.com', dob: '1986-09-22' },
+		colleague: { legal_name: 'Ashley Brooks', phone: '+1 212 555 0103', email: 'ashley.brooks@example.com', dob: '1990-02-10' },
+		vendor: { legal_name: 'Ryan Mitchell', phone: '+1 212 555 0104', email: 'ryan.mitchell@example.com', dob: '1979-12-03' },
+		employer: { legal_name: 'Hudson Engineering Inc.', short_name: 'Hudson Engineering', phone: '+1 212 555 0200', email: 'info@hudson-eng.example.com' },
+		consultancy: { legal_name: 'Blue Kite Consulting LLC', short_name: 'Blue Kite Consulting', phone: '+1 212 555 0300', email: 'admin@bluekite.example.com' },
+		holdings: { legal_name: 'Lakeside Holdings LLC', short_name: 'Lakeside Holdings', phone: '+1 212 555 0400', email: 'finance@lakeside.example.com' },
+	},
+	EU: {
+		bankIds: ['eu-ing-inv', 'eu-abn-inv', 'eu-rabo-inv'],
+		suspect: { legal_name: 'Pieter de Vries', phone: '+31 6 5550 0101', email: 'pieter.devries@example.eu', dob: '1984-06-15' },
+		spouse: { legal_name: 'Anouk de Vries', phone: '+31 6 5550 0102', email: 'anouk.devries@example.eu', dob: '1986-09-22' },
+		colleague: { legal_name: 'Sanne Jansen', phone: '+31 6 5550 0103', email: 'sanne.jansen@example.eu', dob: '1990-02-10' },
+		vendor: { legal_name: 'Daan Bakker', phone: '+31 6 5550 0104', email: 'daan.bakker@example.eu', dob: '1979-12-03' },
+		employer: { legal_name: 'Delta Engineering B.V.', short_name: 'Delta Engineering', phone: '+31 20 555 0200', email: 'info@delta-eng.example.eu' },
+		consultancy: { legal_name: 'Blue Kite Consulting B.V.', short_name: 'Blue Kite Consulting', phone: '+31 20 555 0300', email: 'admin@bluekite.example.eu' },
+		holdings: { legal_name: 'Oranje Holdings B.V.', short_name: 'Oranje Holdings', phone: '+31 20 555 0400', email: 'finance@oranje.example.eu' },
+	},
+	ZA: {
+		bankIds: ['za-fnb-inv', 'za-std-inv', 'za-ndb-inv'],
+		suspect: { legal_name: 'Thabo Maseko', phone: '+27 82 555 0101', email: 'thabo.maseko@example.co.za', dob: '1984-06-15' },
+		spouse: { legal_name: 'Lerato Maseko', phone: '+27 83 555 0102', email: 'lerato.maseko@example.co.za', dob: '1986-09-22' },
+		colleague: { legal_name: 'Nomsa Dlamini', phone: '+27 84 555 0103', email: 'nomsa.dlamini@example.co.za', dob: '1990-02-10' },
+		vendor: { legal_name: 'Karabo Molefe', phone: '+27 76 555 0104', email: 'karabo.molefe@example.co.za', dob: '1979-12-03' },
+		employer: { legal_name: 'Mzansi Engineering (Pty) Ltd', short_name: 'Mzansi Engineering', phone: '+27 11 555 0200', email: 'info@mzansi-eng.example.co.za' },
+		consultancy: { legal_name: 'Blue Kite Consulting (Pty) Ltd', short_name: 'Blue Kite Consulting', phone: '+27 11 555 0300', email: 'admin@bluekite.example.co.za' },
+		holdings: { legal_name: 'Ndlovu Holdings (Pty) Ltd', short_name: 'Ndlovu Holdings', phone: '+27 11 555 0400', email: 'finance@ndlovu.example.co.za' },
+	},
+	NG: {
+		bankIds: ['ng-gtb-inv', 'ng-zenith-inv', 'ng-access-inv'],
+		suspect: { legal_name: 'Chinedu Okafor', phone: '+234 803 555 0101', email: 'chinedu.okafor@example.ng', dob: '1984-06-15' },
+		spouse: { legal_name: 'Ngozi Okafor', phone: '+234 803 555 0102', email: 'ngozi.okafor@example.ng', dob: '1986-09-22' },
+		colleague: { legal_name: 'Aisha Bello', phone: '+234 803 555 0103', email: 'aisha.bello@example.ng', dob: '1990-02-10' },
+		vendor: { legal_name: 'Tunde Adeyemi', phone: '+234 803 555 0104', email: 'tunde.adeyemi@example.ng', dob: '1979-12-03' },
+		employer: { legal_name: 'Niger Delta Engineering Ltd', short_name: 'Niger Delta Engineering', phone: '+234 1 555 0200', email: 'info@ndelta-eng.example.ng' },
+		consultancy: { legal_name: 'Blue Kite Consulting Ltd', short_name: 'Blue Kite Consulting', phone: '+234 1 555 0300', email: 'admin@bluekite.example.ng' },
+		holdings: { legal_name: 'Eko Holdings Ltd', short_name: 'Eko Holdings', phone: '+234 1 555 0400', email: 'finance@eko.example.ng' },
+	},
+	TZ: {
+		bankIds: ['tz-crdb-inv', 'tz-nmb-inv', 'tz-nbc-inv'],
+		suspect: { legal_name: 'Juma Mollel', phone: '+255 754 555 0101', email: 'juma.mollel@example.tz', dob: '1984-06-15' },
+		spouse: { legal_name: 'Neema Mollel', phone: '+255 754 555 0102', email: 'neema.mollel@example.tz', dob: '1986-09-22' },
+		colleague: { legal_name: 'Rehema Mushi', phone: '+255 754 555 0103', email: 'rehema.mushi@example.tz', dob: '1990-02-10' },
+		vendor: { legal_name: 'Hassan Ally', phone: '+255 754 555 0104', email: 'hassan.ally@example.tz', dob: '1979-12-03' },
+		employer: { legal_name: 'Kilimanjaro Engineering Ltd', short_name: 'Kilimanjaro Engineering', phone: '+255 22 555 0200', email: 'info@kili-eng.example.tz' },
+		consultancy: { legal_name: 'Blue Kite Consulting Ltd', short_name: 'Blue Kite Consulting', phone: '+255 22 555 0300', email: 'admin@bluekite.example.tz' },
+		holdings: { legal_name: 'Pwani Holdings Ltd', short_name: 'Pwani Holdings', phone: '+255 22 555 0400', email: 'finance@pwani.example.tz' },
+	},
+	OM: {
+		bankIds: ['om-bmus-inv', 'om-nbo-inv', 'om-bdof-inv'],
+		suspect: { legal_name: 'Said Al Hinai', phone: '+968 9555 0101', email: 'said.alhinai@example.om', dob: '1984-06-15' },
+		spouse: { legal_name: 'Fatma Al Hinai', phone: '+968 9555 0102', email: 'fatma.alhinai@example.om', dob: '1986-09-22' },
+		colleague: { legal_name: 'Noor Al Zadjali', phone: '+968 9555 0103', email: 'noor.alzadjali@example.om', dob: '1990-02-10' },
+		vendor: { legal_name: 'Yousuf Al Amri', phone: '+968 9555 0104', email: 'yousuf.alamri@example.om', dob: '1979-12-03' },
+		employer: { legal_name: 'Majan Engineering LLC', short_name: 'Majan Engineering', phone: '+968 2455 0200', email: 'info@majan-eng.example.om' },
+		consultancy: { legal_name: 'Blue Kite Consulting LLC', short_name: 'Blue Kite Consulting', phone: '+968 2455 0300', email: 'admin@bluekite.example.om' },
+		holdings: { legal_name: 'Al Jabal Holdings LLC', short_name: 'Al Jabal Holdings', phone: '+968 2455 0400', email: 'finance@aljabal.example.om' },
+	},
+};
+
+export function getCaseExample(countryCode: string): CaseExampleCast {
+	return CASE_EXAMPLES[countryCode] || CASE_EXAMPLES[getCountryConfig(countryCode).code];
 }

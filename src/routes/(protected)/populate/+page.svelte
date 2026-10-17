@@ -48,10 +48,21 @@
 		countryCurrencyMap[c.code] = c.currency;
 	}
 
+	// Default fraud case bank IDs follow the selected country
+	const caseBankIdsMap: Record<string, string> = {};
+	for (const c of data.caseExamples) {
+		caseBankIdsMap[c.code] = c.bankIds.join(', ');
+	}
+	let caseBankIds = $state(caseBankIdsMap[data.defaults.countryCode] ?? '');
+	let countryName = $derived(data.countries.find((c) => c.code === countryCode)?.name ?? countryCode);
+
 	function onCountryChange(code: string) {
 		countryCode = code;
 		if (countryCurrencyMap[code]) {
 			currency = countryCurrencyMap[code];
+		}
+		if (caseBankIdsMap[code]) {
+			caseBankIds = caseBankIdsMap[code];
 		}
 	}
 	let createCounterparties = $state(true);
@@ -288,6 +299,7 @@
 							<option value="ZAR">ZAR - South African Rand</option>
 							<option value="NGN">NGN - Nigerian Naira</option>
 							<option value="TZS">TZS - Tanzanian Shilling</option>
+							<option value="OMR">OMR - Omani Rial</option>
 						</select>
 					</div>
 				</div>
@@ -550,7 +562,7 @@
 
 			<hr class="border-surface-700 my-4" />
 
-			<p class="text-sm font-medium mb-3">Investigation Demo</p>
+			<p class="text-sm font-medium mb-3">Fraud case setup</p>
 			<form
 				method="POST"
 				action="?/populateInvestigationCase"
@@ -562,6 +574,8 @@
 					};
 				}}
 			>
+				<input type="hidden" name="country" value={countryCode} />
+				<input type="hidden" name="currency" value={currency} />
 				<div class="mb-2">
 					<label for="casePrefix" class="block text-xs font-medium mb-1">Bank ID Prefix</label>
 					<input
@@ -580,7 +594,7 @@
 						type="text"
 						id="caseBankIds"
 						name="caseBankIds"
-						value="za-fnb-inv, za-std-inv, za-ndb-inv"
+						bind:value={caseBankIds}
 						class="input w-full text-sm"
 						placeholder="bank1, bank2, bank3"
 						disabled={isLoadingInvestigation}
@@ -600,7 +614,7 @@
 						Populate Case Example
 					{/if}
 				</button>
-				<p class="text-xs text-surface-500 mb-1">Creates a fraud investigation dataset across your banks:</p>
+				<p class="text-xs text-surface-500 mb-1">Creates a fraud investigation dataset across your banks, using the selected country ({countryName}) and currency ({currency}):</p>
 				<ul class="text-xs text-surface-500 space-y-0.5 ml-4 list-disc">
 					<li>3 banks (your IDs, prefixed)</li>
 					<li>6 customers (individuals + shell companies)</li>
@@ -741,7 +755,7 @@
 					<ul class="space-y-3">
 						<li class="flex items-center gap-3">
 							<Loader2 class="size-4 animate-spin text-primary-400" />
-							<span>Creating 3 South African banks...</span>
+							<span>Creating 3 banks ({countryName}, {currency})...</span>
 						</li>
 						<li class="flex items-center gap-3">
 							<Loader2 class="size-4 animate-spin text-primary-400" />
@@ -777,7 +791,7 @@
 				<div class="space-y-4 max-h-[60vh] overflow-y-auto">
 					<p class="text-sm text-surface-400 mb-2 flex items-center gap-2">
 						<ShieldAlert class="size-4 text-warning-400" />
-						Investigation Case — SA Fraud Detection Demo
+						Fraud Case — {form.caseCountry} ({form.caseCurrency})
 					</p>
 
 					<!-- Banks -->

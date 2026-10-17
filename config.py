@@ -19,5 +19,6 @@ OBP_CONSUMER_KEY = os.getenv("OBP_CONSUMER_KEY")
 # Sandbox data configuration
 NUM_BANKS = 2
 NUM_ACCOUNTS_PER_BANK = 5
-COUNTRY = "Botswana"
-CURRENCY = "BWP"  # Botswana Pula
+# Supported countries: "Botswana" (BWP), "Oman" (OMR)
+COUNTRY = os.getenv("DEFAULT_COUNTRY", "Botswana")
+CURRENCY = os.getenv("DEFAULT_CURRENCY", "BWP")

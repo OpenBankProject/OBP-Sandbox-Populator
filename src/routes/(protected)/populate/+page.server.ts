@@ -7,6 +7,7 @@ import { env } from '$env/dynamic/public';
 import {
 	COUNTRY_LIST,
 	getCountryConfig,
+	getCaseExample,
 	getBusinesses,
 	getBusinessForCounterparty,
 	getIndividualCustomers,
@@ -31,7 +32,8 @@ const FX_RATES: Record<string, number> = {
 	NAD: 1.37, // 1 BWP = 1.37 NAD
 	CNY: 0.53, // 1 BWP = 0.53 CNY
 	JPY: 11.2, // 1 BWP = 11.2 JPY
-	SGD: 0.099 // 1 BWP = 0.099 SGD
+	SGD: 0.099, // 1 BWP = 0.099 SGD
+	OMR: 0.0285 // 1 BWP = 0.0285 OMR
 };
 
 // Target currencies for FX rates
@@ -205,6 +207,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		username,
 		obpBaseUrl: env.PUBLIC_OBP_BASE_URL,
 		countries: COUNTRY_LIST.map(c => ({ code: c.code, name: c.name, currency: c.currency })),
+		caseExamples: COUNTRY_LIST.map(c => ({ code: c.code, bankIds: getCaseExample(c.code).bankIds })),
 		defaults: {
 			numBanks: 2,
 			numAccountsPerBank: 5,
@@ -1311,7 +1314,10 @@ export const actions: Actions = {
 
 		const formData = await request.formData();
 		const casePrefix = (formData.get('casePrefix') as string) || getUsernamePrefix(user.username);
-		const caseBankIdsRaw = (formData.get('caseBankIds') as string) || 'za-fnb-inv, za-std-inv, za-ndb-inv';
+		const countryConfig = getCountryConfig((formData.get('country') as string) || 'BW');
+		const CURRENCY = (formData.get('currency') as string) || countryConfig.currency;
+		const cast = getCaseExample(countryConfig.code);
+		const caseBankIdsRaw = (formData.get('caseBankIds') as string) || cast.bankIds.join(', ');
 		const caseBankIds = caseBankIdsRaw.split(',').map(s => s.trim()).filter(Boolean);
 		if (caseBankIds.length < 3) {
 			return fail(400, { error: 'Please provide at least 3 bank IDs (comma-separated).' });
@@ -1362,87 +1368,104 @@ export const actions: Actions = {
 		const bank2 = BANKS[1].bank_id;
 		const bank3 = BANKS[2].bank_id;
 
+		// Amounts below are written in ZAR; scale them to the selected currency (3 significant figures)
+		const fxScale = (FX_RATES[CURRENCY] ?? (CURRENCY === BASE_CURRENCY ? 1 : FX_RATES.ZAR)) / FX_RATES.ZAR;
+		const amt = (zar: string) => Number((parseFloat(zar) * fxScale).toPrecision(3)).toFixed(2);
+
+		const { suspect, spouse, colleague, vendor, employer, consultancy, holdings } = cast;
+
 		// Individuals
 		const INDIVIDUALS = [
-			{ legal_name: 'Thabo Maseko', phone: '+27 82 555 0101', email: 'thabo.maseko@example.co.za', dob: '1984-06-15', title: 'Mr', employment: 'employed', education: 'Bachelor', relationship: 'married', banks: [bank1, bank2] },
-			{ legal_name: 'Lerato Maseko', phone: '+27 83 555 0102', email: 'lerato.maseko@example.co.za', dob: '1986-09-22', title: 'Mrs', employment: 'employed', education: 'Diploma', relationship: 'married', banks: [bank1] },
-			{ legal_name: 'Nomsa Dlamini', phone: '+27 84 555 0103', email: 'nomsa.dlamini@example.co.za', dob: '1990-02-10', title: 'Ms', employment: 'employed', education: 'Bachelor', relationship: 'single', banks: [bank1] },
-			{ legal_name: 'Karabo Molefe', phone: '+27 76 555 0104', email: 'karabo.molefe@example.co.za', dob: '1979-12-03', title: 'Mr', employment: 'self-employed', education: '', relationship: 'single', banks: [bank2] }
+			{ ...suspect, title: 'Mr', employment: 'employed', education: 'Bachelor', relationship: 'married', banks: [bank1, bank2] },
+			{ ...spouse, title: 'Mrs', employment: 'employed', education: 'Diploma', relationship: 'married', banks: [bank1] },
+			{ ...colleague, title: 'Ms', employment: 'employed', education: 'Bachelor', relationship: 'single', banks: [bank1] },
+			{ ...vendor, title: 'Mr', employment: 'self-employed', education: '', relationship: 'single', banks: [bank2] }
 		];
 		// Corporates
 		const CORPORATES = [
-			{ legal_name: 'Mzansi Engineering (Pty) Ltd', phone: '+27 11 555 0200', email: 'info@mzansi-eng.example.co.za', category: 'Engineering', banks: [bank1] },
-			{ legal_name: 'Blue Kite Consulting (Pty) Ltd', phone: '+27 11 555 0300', email: 'admin@bluekite.example.co.za', category: 'Consulting', banks: [bank2] },
-			{ legal_name: 'Ndlovu Holdings (Pty) Ltd', phone: '+27 11 555 0400', email: 'finance@ndlovu.example.co.za', category: 'Holdings', banks: [bank2, bank3] }
+			{ ...employer, category: 'Engineering', banks: [bank1] },
+			{ ...consultancy, category: 'Consulting', banks: [bank2] },
+			{ ...holdings, category: 'Holdings', banks: [bank2, bank3] }
 		];
+
+		// ── Account labels ──
+		const SUSPECT_SALARY = `${suspect.legal_name} - Salary Account`;
+		const SUSPECT_SAVINGS = `${suspect.legal_name} - Savings Account`;
+		const SUSPECT_CURRENT = `${suspect.legal_name} - Current Account`;
+		const SPOUSE_PERSONAL = `${spouse.legal_name} - Personal Account`;
+		const COLLEAGUE_PERSONAL = `${colleague.legal_name} - Personal Account`;
+		const VENDOR_ACCOUNT = `${vendor.legal_name} - Vendor Account`;
+		const EMPLOYER_BUSINESS = `${employer.short_name} - Business Account`;
+		const CONSULTANCY_BUSINESS = `${consultancy.short_name} - Business Account`;
+		const HOLDINGS_BUSINESS = `${holdings.short_name} - Business Account`;
+		const HOLDINGS_RESERVE = `${holdings.short_name} - Reserve Account`;
 
 		// ── Account definitions (bank_id → label → owner legal_name) ──
 		const ACCOUNTS: Array<{ bank_id: string; label: string; owner: string }> = [
 			// Bank 1 — normal layer
-			{ bank_id: bank1, label: 'Thabo Maseko - Salary Account', owner: 'Thabo Maseko' },
-			{ bank_id: bank1, label: 'Thabo Maseko - Savings Account', owner: 'Thabo Maseko' },
-			{ bank_id: bank1, label: 'Lerato Maseko - Personal Account', owner: 'Lerato Maseko' },
-			{ bank_id: bank1, label: 'Nomsa Dlamini - Personal Account', owner: 'Nomsa Dlamini' },
-			{ bank_id: bank1, label: 'Mzansi Engineering - Business Account', owner: 'Mzansi Engineering (Pty) Ltd' },
+			{ bank_id: bank1, label: SUSPECT_SALARY, owner: suspect.legal_name },
+			{ bank_id: bank1, label: SUSPECT_SAVINGS, owner: suspect.legal_name },
+			{ bank_id: bank1, label: SPOUSE_PERSONAL, owner: spouse.legal_name },
+			{ bank_id: bank1, label: COLLEAGUE_PERSONAL, owner: colleague.legal_name },
+			{ bank_id: bank1, label: EMPLOYER_BUSINESS, owner: employer.legal_name },
 			// Bank 2 — suspicious layer
-			{ bank_id: bank2, label: 'Thabo Maseko - Current Account', owner: 'Thabo Maseko' },
-			{ bank_id: bank2, label: 'Blue Kite Consulting - Business Account', owner: 'Blue Kite Consulting (Pty) Ltd' },
-			{ bank_id: bank2, label: 'Ndlovu Holdings - Business Account', owner: 'Ndlovu Holdings (Pty) Ltd' },
-			{ bank_id: bank2, label: 'Karabo Molefe - Vendor Account', owner: 'Karabo Molefe' },
+			{ bank_id: bank2, label: SUSPECT_CURRENT, owner: suspect.legal_name },
+			{ bank_id: bank2, label: CONSULTANCY_BUSINESS, owner: consultancy.legal_name },
+			{ bank_id: bank2, label: HOLDINGS_BUSINESS, owner: holdings.legal_name },
+			{ bank_id: bank2, label: VENDOR_ACCOUNT, owner: vendor.legal_name },
 			// Bank 3 — expansion layer
-			{ bank_id: bank3, label: 'Ndlovu Holdings - Reserve Account', owner: 'Ndlovu Holdings (Pty) Ltd' }
+			{ bank_id: bank3, label: HOLDINGS_RESERVE, owner: holdings.legal_name }
 		];
 
 		// ── Transaction definitions (references account labels) ──
 		// from_label and to_label must match ACCOUNTS[].label at the same bank_id
 		const TRANSACTIONS: Array<{ date: string; bank_id: string; from_label: string; to_label: string; amount: string; description: string }> = [
 			// ── Normal layer: salary, savings, household (Bank 1) ──
-			{ date: '2024-06-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Thabo Maseko - Salary Account', amount: '45000.00', description: 'Salary - June 2024' },
-			{ date: '2024-06-26', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Thabo Maseko - Savings Account', amount: '5000.00', description: 'Monthly savings' },
-			{ date: '2024-06-27', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '3500.00', description: 'Household contribution' },
-			{ date: '2024-06-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Nomsa Dlamini - Personal Account', amount: '38000.00', description: 'Salary - June 2024' },
-			{ date: '2024-07-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Thabo Maseko - Salary Account', amount: '45000.00', description: 'Salary - July 2024' },
-			{ date: '2024-07-26', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Thabo Maseko - Savings Account', amount: '5000.00', description: 'Monthly savings' },
-			{ date: '2024-07-27', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '3500.00', description: 'Household contribution' },
-			{ date: '2024-07-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Nomsa Dlamini - Personal Account', amount: '38000.00', description: 'Salary - July 2024' },
-			{ date: '2024-08-25', bank_id: bank1, from_label: 'Mzansi Engineering - Business Account', to_label: 'Thabo Maseko - Salary Account', amount: '45000.00', description: 'Salary - August 2024' },
-			{ date: '2024-08-26', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Thabo Maseko - Savings Account', amount: '5000.00', description: 'Monthly savings' },
-			{ date: '2024-08-27', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '3500.00', description: 'Household contribution' },
+			{ date: '2024-06-25', bank_id: bank1, from_label: EMPLOYER_BUSINESS, to_label: SUSPECT_SALARY, amount: amt('45000.00'), description: 'Salary - June 2024' },
+			{ date: '2024-06-26', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SUSPECT_SAVINGS, amount: amt('5000.00'), description: 'Monthly savings' },
+			{ date: '2024-06-27', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SPOUSE_PERSONAL, amount: amt('3500.00'), description: 'Household contribution' },
+			{ date: '2024-06-25', bank_id: bank1, from_label: EMPLOYER_BUSINESS, to_label: COLLEAGUE_PERSONAL, amount: amt('38000.00'), description: 'Salary - June 2024' },
+			{ date: '2024-07-25', bank_id: bank1, from_label: EMPLOYER_BUSINESS, to_label: SUSPECT_SALARY, amount: amt('45000.00'), description: 'Salary - July 2024' },
+			{ date: '2024-07-26', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SUSPECT_SAVINGS, amount: amt('5000.00'), description: 'Monthly savings' },
+			{ date: '2024-07-27', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SPOUSE_PERSONAL, amount: amt('3500.00'), description: 'Household contribution' },
+			{ date: '2024-07-25', bank_id: bank1, from_label: EMPLOYER_BUSINESS, to_label: COLLEAGUE_PERSONAL, amount: amt('38000.00'), description: 'Salary - July 2024' },
+			{ date: '2024-08-25', bank_id: bank1, from_label: EMPLOYER_BUSINESS, to_label: SUSPECT_SALARY, amount: amt('45000.00'), description: 'Salary - August 2024' },
+			{ date: '2024-08-26', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SUSPECT_SAVINGS, amount: amt('5000.00'), description: 'Monthly savings' },
+			{ date: '2024-08-27', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SPOUSE_PERSONAL, amount: amt('3500.00'), description: 'Household contribution' },
 
-			// ── Suspicious layer: Ndlovu → Blue Kite → Thabo (Bank 2) ──
-			{ date: '2024-06-20', bank_id: bank2, from_label: 'Ndlovu Holdings - Business Account', to_label: 'Blue Kite Consulting - Business Account', amount: '180000.00', description: 'Project Delivery Phase 2' },
-			{ date: '2024-06-22', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '75000.00', description: 'Consulting Fee - June' },
-			{ date: '2024-06-24', bank_id: bank2, from_label: 'Thabo Maseko - Current Account', to_label: 'Karabo Molefe - Vendor Account', amount: '12000.00', description: 'Payment - Ref TRX8842' },
+			// ── Suspicious layer: holdings → consultancy → suspect (Bank 2) ──
+			{ date: '2024-06-20', bank_id: bank2, from_label: HOLDINGS_BUSINESS, to_label: CONSULTANCY_BUSINESS, amount: amt('180000.00'), description: 'Project Delivery Phase 2' },
+			{ date: '2024-06-22', bank_id: bank2, from_label: CONSULTANCY_BUSINESS, to_label: SUSPECT_CURRENT, amount: amt('75000.00'), description: 'Consulting Fee - June' },
+			{ date: '2024-06-24', bank_id: bank2, from_label: SUSPECT_CURRENT, to_label: VENDOR_ACCOUNT, amount: amt('12000.00'), description: 'Payment - Ref TRX8842' },
 
-			// Lerato receives transfer shortly after Blue Kite payment
-			{ date: '2024-06-25', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '15000.00', description: 'Transfer' },
+			// Spouse receives transfer shortly after consultancy payment
+			{ date: '2024-06-25', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SPOUSE_PERSONAL, amount: amt('15000.00'), description: 'Transfer' },
 
-			{ date: '2024-07-18', bank_id: bank2, from_label: 'Ndlovu Holdings - Business Account', to_label: 'Blue Kite Consulting - Business Account', amount: '95000.00', description: 'Advisory Services Q3' },
-			{ date: '2024-07-20', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '55000.00', description: 'Consulting Fee - July' },
-			// Lerato again shortly after
-			{ date: '2024-07-22', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '22000.00', description: 'Transfer' },
+			{ date: '2024-07-18', bank_id: bank2, from_label: HOLDINGS_BUSINESS, to_label: CONSULTANCY_BUSINESS, amount: amt('95000.00'), description: 'Advisory Services Q3' },
+			{ date: '2024-07-20', bank_id: bank2, from_label: CONSULTANCY_BUSINESS, to_label: SUSPECT_CURRENT, amount: amt('55000.00'), description: 'Consulting Fee - July' },
+			// Spouse again shortly after
+			{ date: '2024-07-22', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SPOUSE_PERSONAL, amount: amt('22000.00'), description: 'Transfer' },
 
-			{ date: '2024-08-10', bank_id: bank2, from_label: 'Ndlovu Holdings - Business Account', to_label: 'Blue Kite Consulting - Business Account', amount: '67000.00', description: 'Invoice 2024-0891' },
-			{ date: '2024-08-12', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '120000.00', description: 'Professional Services' },
+			{ date: '2024-08-10', bank_id: bank2, from_label: HOLDINGS_BUSINESS, to_label: CONSULTANCY_BUSINESS, amount: amt('67000.00'), description: 'Invoice 2024-0891' },
+			{ date: '2024-08-12', bank_id: bank2, from_label: CONSULTANCY_BUSINESS, to_label: SUSPECT_CURRENT, amount: amt('120000.00'), description: 'Professional Services' },
 			// Large vehicle purchase inconsistent with salary
-			{ date: '2024-08-14', bank_id: bank2, from_label: 'Thabo Maseko - Current Account', to_label: 'Karabo Molefe - Vendor Account', amount: '85000.00', description: 'Vehicle Deposit - BMW' },
-			// Lerato again
-			{ date: '2024-08-15', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '18000.00', description: 'Transfer' },
+			{ date: '2024-08-14', bank_id: bank2, from_label: SUSPECT_CURRENT, to_label: VENDOR_ACCOUNT, amount: amt('85000.00'), description: 'Vehicle Deposit - BMW' },
+			// Spouse again
+			{ date: '2024-08-15', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SPOUSE_PERSONAL, amount: amt('18000.00'), description: 'Transfer' },
 
 			// Blurred / generic reference
-			{ date: '2024-08-20', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '43500.00', description: 'Payment - Ref TRX9103' },
+			{ date: '2024-08-20', bank_id: bank2, from_label: CONSULTANCY_BUSINESS, to_label: SUSPECT_CURRENT, amount: amt('43500.00'), description: 'Payment - Ref TRX9103' },
 
-			// ── Investigative expansion: Karabo becomes recurring, new patterns ──
-			{ date: '2024-09-02', bank_id: bank2, from_label: 'Karabo Molefe - Vendor Account', to_label: 'Thabo Maseko - Current Account', amount: '18500.00', description: 'Commission Payment' },
-			{ date: '2024-09-05', bank_id: bank2, from_label: 'Karabo Molefe - Vendor Account', to_label: 'Blue Kite Consulting - Business Account', amount: '32000.00', description: 'Service Agreement' },
-			{ date: '2024-09-10', bank_id: bank2, from_label: 'Ndlovu Holdings - Business Account', to_label: 'Blue Kite Consulting - Business Account', amount: '145000.00', description: 'Procurement Facilitation' },
-			{ date: '2024-09-12', bank_id: bank2, from_label: 'Blue Kite Consulting - Business Account', to_label: 'Thabo Maseko - Current Account', amount: '88000.00', description: 'Consulting Fee - September' },
-			{ date: '2024-09-14', bank_id: bank1, from_label: 'Thabo Maseko - Salary Account', to_label: 'Lerato Maseko - Personal Account', amount: '25000.00', description: 'Transfer' },
-			// Bank 3 expansion — Ndlovu moving money across banks
-			{ date: '2024-09-18', bank_id: bank3, from_label: 'Ndlovu Holdings - Reserve Account', to_label: 'Ndlovu Holdings - Reserve Account', amount: '250000.00', description: 'Reserve Rebalance' }
+			// ── Investigative expansion: vendor becomes recurring, new patterns ──
+			{ date: '2024-09-02', bank_id: bank2, from_label: VENDOR_ACCOUNT, to_label: SUSPECT_CURRENT, amount: amt('18500.00'), description: 'Commission Payment' },
+			{ date: '2024-09-05', bank_id: bank2, from_label: VENDOR_ACCOUNT, to_label: CONSULTANCY_BUSINESS, amount: amt('32000.00'), description: 'Service Agreement' },
+			{ date: '2024-09-10', bank_id: bank2, from_label: HOLDINGS_BUSINESS, to_label: CONSULTANCY_BUSINESS, amount: amt('145000.00'), description: 'Procurement Facilitation' },
+			{ date: '2024-09-12', bank_id: bank2, from_label: CONSULTANCY_BUSINESS, to_label: SUSPECT_CURRENT, amount: amt('88000.00'), description: 'Consulting Fee - September' },
+			{ date: '2024-09-14', bank_id: bank1, from_label: SUSPECT_SALARY, to_label: SPOUSE_PERSONAL, amount: amt('25000.00'), description: 'Transfer' },
+			// Bank 3 expansion — holdings moving money across banks
+			{ date: '2024-09-18', bank_id: bank3, from_label: HOLDINGS_RESERVE, to_label: HOLDINGS_RESERVE, amount: amt('250000.00'), description: 'Reserve Rebalance' }
 		];
 
-		const CURRENCY = 'ZAR';
 		const ENTITLEMENTS = [
 			'CanCreateAccount', 'CanCreateHistoricalTransactionAtBank',
 			'CanCreateCustomer', 'CanGetCustomersAtOneBank',
@@ -1534,7 +1557,7 @@ export const actions: Actions = {
 								highest_education_attained: ind.education || undefined,
 								relationship_status: ind.relationship,
 								kyc_status: true,
-								credit_limit: { currency: CURRENCY, amount: '50000' },
+								credit_limit: { currency: CURRENCY, amount: amt('50000') },
 								credit_rating: { rating: 'A', source: 'OBP' },
 								last_ok_date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 							});
@@ -1568,7 +1591,7 @@ export const actions: Actions = {
 								mobile_phone_number: corp.phone,
 								email: corp.email,
 								kyc_status: true,
-								credit_limit: { currency: CURRENCY, amount: '1000000' },
+								credit_limit: { currency: CURRENCY, amount: amt('1000000') },
 								credit_rating: { rating: 'AAA', source: 'OBP' },
 								last_ok_date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 							});
@@ -1608,12 +1631,12 @@ export const actions: Actions = {
 			// ── Step 5: Create Customer Links (customer-to-customer relationships) ──
 			logger.info('Investigation case: Creating customer links...');
 			const CUSTOMER_LINKS: Array<{ bank_id: string; customer_name: string; other_customer_name: string; relationship_to: string }> = [
-				// Thabo & Lerato are married
-				{ bank_id: bank1, customer_name: 'Thabo Maseko', other_customer_name: 'Lerato Maseko', relationship_to: 'spouse' },
-				// Thabo is a close associate of Karabo (suspicious vendor relationship)
-				{ bank_id: bank2, customer_name: 'Thabo Maseko', other_customer_name: 'Karabo Molefe', relationship_to: 'close_associate' },
-				// Nomsa is a colleague at Mzansi Engineering
-				{ bank_id: bank1, customer_name: 'Thabo Maseko', other_customer_name: 'Nomsa Dlamini', relationship_to: 'business_partner' },
+				// Suspect & spouse are married
+				{ bank_id: bank1, customer_name: suspect.legal_name, other_customer_name: spouse.legal_name, relationship_to: 'spouse' },
+				// Suspect is a close associate of the vendor (suspicious vendor relationship)
+				{ bank_id: bank2, customer_name: suspect.legal_name, other_customer_name: vendor.legal_name, relationship_to: 'close_associate' },
+				// Colleague at the employer
+				{ bank_id: bank1, customer_name: suspect.legal_name, other_customer_name: colleague.legal_name, relationship_to: 'business_partner' },
 			];
 
 			for (const linkDef of CUSTOMER_LINKS) {
@@ -1674,7 +1697,7 @@ export const actions: Actions = {
 						existed: false,
 						description: txnDef.description
 					});
-					logger.info(`Created transaction: ${txnDef.description} (${txnDef.amount} ZAR)`);
+					logger.info(`Created transaction: ${txnDef.description} (${txnDef.amount} ${CURRENCY})`);
 				} catch (e: any) {
 					results.errors.push(`Transaction "${txnDef.description}": ${e.message}`);
 				}
@@ -1686,6 +1709,8 @@ export const actions: Actions = {
 			return {
 				success: true,
 				action: 'investigationCase',
+				caseCountry: countryConfig.name,
+				caseCurrency: CURRENCY,
 				results
 			};
 		} catch (e: any) {
